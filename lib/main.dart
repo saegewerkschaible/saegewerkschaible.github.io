@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:saegewerk/services/filter/filter_settings.dart';
 
-import 'firebase_options.dart'; // <-- Hinzufügen!
+import 'firebase_options.dart';
 import 'core/theme/theme_provider.dart';
+
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/registration_screen.dart';
@@ -14,7 +16,7 @@ void main() async {
 
   try {
     await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform, // <-- Hinzufügen!
+      options: DefaultFirebaseOptions.currentPlatform,
     );
     debugPrint('✅ Firebase initialisiert');
   } catch (e) {
@@ -27,8 +29,11 @@ void main() async {
   final isLoggedIn = AuthService().currentUser != null;
 
   runApp(
-    ChangeNotifierProvider.value(
-      value: themeProvider,
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: themeProvider),
+        ChangeNotifierProvider(create: (_) => FilterSettings()), // NEU
+      ],
       child: SchaibleApp(isLoggedIn: isLoggedIn),
     ),
   );

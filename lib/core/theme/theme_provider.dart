@@ -1,3 +1,5 @@
+// lib/core/theme/theme_provider.dart
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'app_colors.dart';
@@ -10,6 +12,14 @@ class ThemeProvider extends ChangeNotifier {
 
   bool get isDarkMode => _isDarkMode;
   bool get isInitialized => _isInitialized;
+
+  // ═══════════════════════════════════════════════════════════════
+  // COLORS WRAPPER (für Kompatibilität mit Filter-System)
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Ermöglicht Zugriff via `theme.colors.primary` (Kompatibilität)
+  /// oder direkt via `theme.primary`
+  ThemeColors get colors => ThemeColors(this);
 
   // ═══════════════════════════════════════════════════════════════
   // AKTUELLE FARBEN (basierend auf Theme)
@@ -37,6 +47,10 @@ class ThemeProvider extends ChangeNotifier {
 
   Color get textOnPrimary => Colors.white;
 
+  Color get textHint => _isDarkMode
+      ? Colors.white.withOpacity(0.3)
+      : Colors.black.withOpacity(0.3);
+
   Color get border => _isDarkMode
       ? Colors.white.withOpacity(0.1)
       : Colors.black.withOpacity(0.1);
@@ -45,11 +59,25 @@ class ThemeProvider extends ChangeNotifier {
       ? Colors.white.withOpacity(0.05)
       : Colors.black.withOpacity(0.05);
 
+  Color get shadow => _isDarkMode
+      ? Colors.black.withOpacity(0.3)
+      : Colors.black.withOpacity(0.08);
+
   // Semantische Farben
   Color get success => AppColors.success;
   Color get warning => AppColors.warning;
   Color get error => AppColors.error;
   Color get info => AppColors.info;
+
+  // ═══════════════════════════════════════════════════════════════
+  // ZUSTANDS-FARBEN (für Pakete: frisch, trocken, etc.)
+  // ═══════════════════════════════════════════════════════════════
+
+  Map<String, Color> get stateColors => {
+    'frisch': AppColors.info,
+    'trocken': AppColors.success,
+    'verarbeitet': AppColors.warning,
+  };
 
   // ═══════════════════════════════════════════════════════════════
   // INITIALISIERUNG
@@ -143,4 +171,33 @@ class ThemeProvider extends ChangeNotifier {
       ),
     );
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THEME COLORS WRAPPER
+// Ermöglicht `theme.colors.primary` Syntax für Kompatibilität
+// ═══════════════════════════════════════════════════════════════════════════
+
+class ThemeColors {
+  final ThemeProvider _provider;
+
+  ThemeColors(this._provider);
+
+  Color get primary => _provider.primary;
+  Color get primaryDark => _provider.primaryDark;
+  Color get primaryLight => _provider.primaryLight;
+  Color get background => _provider.background;
+  Color get surface => _provider.surface;
+  Color get textPrimary => _provider.textPrimary;
+  Color get textSecondary => _provider.textSecondary;
+  Color get textOnPrimary => _provider.textOnPrimary;
+  Color get textHint => _provider.textHint;
+  Color get border => _provider.border;
+  Color get divider => _provider.divider;
+  Color get shadow => _provider.shadow;
+  Color get success => _provider.success;
+  Color get warning => _provider.warning;
+  Color get error => _provider.error;
+  Color get info => _provider.info;
+  Map<String, Color> get stateColors => _provider.stateColors;
 }

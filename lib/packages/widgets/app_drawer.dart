@@ -1,43 +1,27 @@
-// lib/widgets/app_drawer.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// lib/packages/widgets/app_drawer.dart
+// ═══════════════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-import 'package:saegewerk/core/theme/theme_provider.dart';
+import 'package:saegewerk/services/auth_service.dart';
 
+import '../../core/theme/theme_provider.dart';
+import '../../constants.dart';
 
-class AppDrawer extends StatefulWidget {
+class AppDrawer extends StatelessWidget {
   final String userName;
   final int userGroup;
+  final int currentIndex;
+  final Function(int) onNavigate;
 
   const AppDrawer({
     super.key,
     required this.userName,
     required this.userGroup,
+    required this.currentIndex,
+    required this.onNavigate,
   });
-
-  @override
-  State<AppDrawer> createState() => _AppDrawerState();
-}
-
-class _AppDrawerState extends State<AppDrawer> {
-  String? _version;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadVersion();
-  }
-
-  Future<void> _loadVersion() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (mounted) {
-        setState(() => _version = info.version);
-      }
-    } catch (e) {
-      // Fallback wenn PackageInfo nicht verfügbar
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,148 +29,242 @@ class _AppDrawerState extends State<AppDrawer> {
 
     return Drawer(
       backgroundColor: theme.surface,
-      child: Column(
-        children: [
-          // Header mit Logo
-          _buildHeader(theme),
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Header
+            _buildHeader(theme),
 
-          Divider(height: 1, color: theme.border),
+            Divider(height: 1, color: theme.divider),
 
-          // Menü-Items (aktuell leer)
-          Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                // Hier kommen später die Menü-Items
-              ],
+            // Navigation Items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  // Nur für Büro (2) und Admin (3)
+                  if (userGroup >= 2) ...[
+                    _buildNavItem(
+                      theme: theme,
+                      icon: Icons.qr_code_scanner,
+                      label: 'Pakete',
+                      index: 0,
+                    ),
+                    _buildNavItem(
+                      theme: theme,
+                      icon: Icons.inventory_2,
+                      label: 'Lager',
+                      index: 1,
+                    ),
+                    _buildNavItem(
+                      theme: theme,
+                      icon: Icons.bar_chart,
+                      label: 'Statistik',
+                      index: 2,
+                    ),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Divider(color: theme.divider),
+                    ),
+                  ],
+
+                  // Info-Bereich
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: theme.border),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline, size: 18, color: theme.textSecondary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'App Info',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoRow(theme, 'Version', '1.0.0'),
+                          _buildInfoRow(theme, 'Benutzer', userName),
+                          _buildInfoRow(theme, 'Rolle', getUserGroupName(userGroup)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // Footer mit Version
-          _buildFooter(theme),
-        ],
+            // Footer
+            Divider(height: 1, color: theme.divider),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  SizedBox(
+                    height: 24,
+                    child: Image.asset(
+                      theme.isDarkMode ? 'assets/images/logo_w.png' : 'assets/images/logo.png',
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Schaible Sägewerk',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: theme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildHeader(ThemeProvider theme) {
     return Container(
-      width: double.infinity,
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 24,
-        bottom: 24,
-        left: 24,
-        right: 24,
-      ),
-      decoration: BoxDecoration(
-        color: theme.surface,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(20),
+      child: Row(
         children: [
-          // Logo
-          Image.asset(
-            theme.isDarkMode ? 'assets/images/logo_w.png' : 'assets/images/logo.png',
-            height: 48,
-            fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _buildFallbackLogo(theme),
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              color: theme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(Icons.person, color: theme.primary, size: 28),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  userName,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    getUserGroupName(userGroup),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          // Begrüßung
+  Widget _buildNavItem({
+    required ThemeProvider theme,
+    required IconData icon,
+    required String label,
+    required int index,
+  }) {
+    final isSelected = currentIndex == index;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => onNavigate(index),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isSelected ? theme.primary.withOpacity(0.1) : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: isSelected ? Border.all(color: theme.primary.withOpacity(0.3)) : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? theme.primary : theme.textSecondary,
+                  size: 22,
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? theme.primary : theme.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                if (isSelected)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: theme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(ThemeProvider theme, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
           Text(
-            'Hallo, ${widget.userName}',
+            label,
+            style: TextStyle(fontSize: 13, color: theme.textSecondary),
+          ),
+          Text(
+            value,
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
               color: theme.textPrimary,
             ),
           ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _getUserGroupLabel(widget.userGroup),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: theme.primary,
-              ),
-            ),
-          ),
         ],
       ),
     );
-  }
-
-  Widget _buildFallbackLogo(ThemeProvider theme) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'SCHAIBLE',
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: theme.textPrimary,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Container(
-          width: 4,
-          height: 24,
-          color: theme.primary,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFooter(ThemeProvider theme) {
-    return Container(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        bottom: MediaQuery.of(context).padding.bottom + 16,
-        top: 16,
-      ),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: theme.border)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.info_outline,
-            size: 16,
-            color: theme.textSecondary.withOpacity(0.5),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _version != null ? 'Version $_version' : 'Sägewerk',
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.textSecondary.withOpacity(0.5),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _getUserGroupLabel(int userGroup) {
-    switch (userGroup) {
-      case 1:
-        return 'Säger';
-      case 2:
-        return 'Büro';
-      case 3:
-        return 'Administrator';
-      default:
-        return 'Benutzer';
-    }
   }
 }

@@ -1,12 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// lib/packages/screens/statistics_screen.dart
+// lib/screens/statistic_screen.dart
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:saegewerk/core/theme/theme_provider.dart';
+
+import '../core/theme/theme_provider.dart';
 
 class StatisticsScreen extends StatefulWidget {
   final int userGroup;
@@ -18,9 +19,10 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  int _selectedTab = 0; // 0=Heute, 1=Woche, 2=Monat
+  int _selectedTab = 0; // 0=Heute, 1=Woche, 2=Monat, 3=Gesamt
   String? _selectedWoodType;
-  String _selectedStatus = 'all'; // all, im_lager, verarbeitet, verkauft
+  String _selectedStatus = 'all';
+  String _selectedZustand = 'all';
 
   final _packagesRef = FirebaseFirestore.instance.collection('packages');
 
@@ -42,7 +44,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildTimeframeTabs(ThemeProvider theme) {
-    final tabs = ['Heute', 'Woche', 'Monat'];
+    final tabs = ['Heute', 'Woche', 'Monat', 'Gesamt'];
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -53,11 +55,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             child: GestureDetector(
               onTap: () => setState(() => _selectedTab = i),
               child: Container(
-                margin: EdgeInsets.only(right: i < tabs.length - 1 ? 8 : 0),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                margin: EdgeInsets.only(right: i < tabs.length - 1 ? 6 : 0),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected ? theme.primary : theme.surface,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isSelected ? theme.primary : theme.border,
                   ),
@@ -65,7 +67,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 child: Text(
                   tabs[i],
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                     color: isSelected ? Colors.white : theme.textSecondary,
                   ),
@@ -86,27 +88,43 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildFilters(ThemeProvider theme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: Row(
+      child: Column(
         children: [
-          // Status Filter
-          Expanded(
-            child: _buildDropdown(
-              theme: theme,
-              value: _selectedStatus,
-              items: const {
-                'all': 'Alle Status',
-                'im_lager': 'Im Lager',
-                'verarbeitet': 'Verarbeitet',
-                'verkauft': 'Verkauft',
-              },
-              onChanged: (v) => setState(() => _selectedStatus = v ?? 'all'),
-            ),
+          // Erste Reihe: Status + Zustand
+          Row(
+            children: [
+              Expanded(
+                child: _buildDropdown(
+                  theme: theme,
+                  value: _selectedStatus,
+                  items: const {
+                    'all': 'Alle Status',
+                    'im_lager': 'Im Lager',
+                    'verarbeitet': 'Verarbeitet',
+                    'verkauft': 'Verkauft',
+                    'ausgebucht': 'Ausgebucht',
+                  },
+                  onChanged: (v) => setState(() => _selectedStatus = v ?? 'all'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildDropdown(
+                  theme: theme,
+                  value: _selectedZustand,
+                  items: const {
+                    'all': 'Alle Zustände',
+                    'frisch': 'Frisch',
+                    'trocken': 'Trocken',
+                  },
+                  onChanged: (v) => setState(() => _selectedZustand = v ?? 'all'),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          // Holzart Filter
-          Expanded(
-            child: _buildWoodTypeDropdown(theme),
-          ),
+          const SizedBox(height: 8),
+          // Zweite Reihe: Holzart
+          _buildWoodTypeDropdown(theme),
         ],
       ),
     );
@@ -144,9 +162,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildWoodTypeDropdown(ThemeProvider theme) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('wood_types')
-          .snapshots(),
+      stream: FirebaseFirestore.instance.collection('wood_types').snapshots(),
       builder: (context, snapshot) {
         List<String> woodTypes = ['Alle Holzarten'];
         if (snapshot.hasData) {
@@ -191,15 +207,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Widget _buildContent(ThemeProvider theme) {
     return StreamBuilder<QuerySnapshot>(
-      stream: _getFilteredStream(),
+      stream: _packagesRef.snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Center(child: CircularProgressIndicator(color: theme.primary));
         }
 
-        final packages = snapshot.data!.docs
+        final allPackages = snapshot.data!.docs
             .map((d) => d.data() as Map<String, dynamic>)
             .toList();
+
+        // Zeitfilter anwenden
+        final packages = _filterByTimeframe(allPackages);
 
         // Statistiken berechnen
         final stats = _calculateStats(packages);
@@ -211,21 +230,41 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             children: [
               // Übersicht Cards
               _buildOverviewCards(theme, stats),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+
+              // Zustand (frisch/trocken) - NEU
+              _buildSection(
+                theme: theme,
+                title: 'Nach Zustand',
+                icon: Icons.water_drop,
+                child: _buildZustandBreakdown(theme, stats),
+              ),
+              const SizedBox(height: 12),
 
               // Nach Status
               _buildSection(
                 theme: theme,
                 title: 'Nach Status',
+                icon: Icons.inventory,
                 child: _buildStatusBreakdown(theme, stats),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
 
               // Nach Holzart
               _buildSection(
                 theme: theme,
                 title: 'Nach Holzart',
+                icon: Icons.forest,
                 child: _buildWoodTypeBreakdown(theme, stats),
+              ),
+              const SizedBox(height: 12),
+
+              // Kombiniert: Holzart + Zustand
+              _buildSection(
+                theme: theme,
+                title: 'Holzart × Zustand',
+                icon: Icons.grid_view,
+                child: _buildCombinedBreakdown(theme, stats),
               ),
             ],
           ),
@@ -234,25 +273,33 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
   }
 
-  Stream<QuerySnapshot> _getFilteredStream() {
-    final now = DateTime.now();
-    String startDate;
+  List<Map<String, dynamic>> _filterByTimeframe(List<Map<String, dynamic>> packages) {
+    if (_selectedTab == 3) return packages; // Gesamt
 
-    switch (_selectedTab) {
-      case 0: // Heute
-        startDate = DateFormat('dd.MM.yyyy').format(now);
-        return _packagesRef.where('datum', isEqualTo: startDate).snapshots();
-      case 1: // Woche
-        final weekStart = now.subtract(Duration(days: now.weekday - 1));
-        startDate = DateFormat('dd.MM.yyyy').format(weekStart);
-        return _packagesRef.where('datum', isGreaterThanOrEqualTo: startDate).snapshots();
-      case 2: // Monat
-        final monthStart = DateTime(now.year, now.month, 1);
-        startDate = DateFormat('dd.MM.yyyy').format(monthStart);
-        return _packagesRef.where('datum', isGreaterThanOrEqualTo: startDate).snapshots();
-      default:
-        return _packagesRef.snapshots();
-    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return packages.where((p) {
+      final datumStr = p['datum']?.toString();
+      if (datumStr == null || datumStr.isEmpty) return false;
+
+      try {
+        final datum = DateFormat('dd.MM.yyyy').parse(datumStr);
+        switch (_selectedTab) {
+          case 0: // Heute
+            return datum.year == today.year && datum.month == today.month && datum.day == today.day;
+          case 1: // Woche
+            final weekStart = today.subtract(Duration(days: today.weekday - 1));
+            return !datum.isBefore(weekStart);
+          case 2: // Monat
+            return datum.year == today.year && datum.month == today.month;
+          default:
+            return true;
+        }
+      } catch (_) {
+        return false;
+      }
+    }).toList();
   }
 
   Map<String, dynamic> _calculateStats(List<Map<String, dynamic>> packages) {
@@ -260,20 +307,29 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     double totalVolume = 0;
 
     // Nach Status
-    Map<String, double> byStatus = {'im_lager': 0, 'verarbeitet': 0, 'verkauft': 0};
-    Map<String, int> countByStatus = {'im_lager': 0, 'verarbeitet': 0, 'verkauft': 0};
+    Map<String, double> byStatus = {};
+    Map<String, int> countByStatus = {};
+
+    // Nach Zustand (NEU)
+    Map<String, double> byZustand = {'frisch': 0, 'trocken': 0};
+    Map<String, int> countByZustand = {'frisch': 0, 'trocken': 0};
 
     // Nach Holzart
     Map<String, double> byWoodType = {};
     Map<String, int> countByWoodType = {};
 
+    // Kombiniert: Holzart + Zustand (NEU)
+    Map<String, Map<String, double>> combined = {};
+
     for (var p in packages) {
       final status = p['status']?.toString() ?? 'im_lager';
+      final zustand = p['zustand']?.toString() ?? 'frisch';
       final holzart = p['holzart']?.toString() ?? 'Sonstige';
       final menge = _parseDouble(p['menge']);
 
       // Filter anwenden
       if (_selectedStatus != 'all' && status != _selectedStatus) continue;
+      if (_selectedZustand != 'all' && zustand != _selectedZustand) continue;
       if (_selectedWoodType != null && holzart != _selectedWoodType) continue;
 
       totalPackages++;
@@ -283,9 +339,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       byStatus[status] = (byStatus[status] ?? 0) + menge;
       countByStatus[status] = (countByStatus[status] ?? 0) + 1;
 
+      // Zustand
+      byZustand[zustand] = (byZustand[zustand] ?? 0) + menge;
+      countByZustand[zustand] = (countByZustand[zustand] ?? 0) + 1;
+
       // Holzart
       byWoodType[holzart] = (byWoodType[holzart] ?? 0) + menge;
       countByWoodType[holzart] = (countByWoodType[holzart] ?? 0) + 1;
+
+      // Kombiniert
+      combined.putIfAbsent(holzart, () => {'frisch': 0, 'trocken': 0});
+      combined[holzart]![zustand] = (combined[holzart]![zustand] ?? 0) + menge;
     }
 
     return {
@@ -293,8 +357,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       'totalVolume': totalVolume,
       'byStatus': byStatus,
       'countByStatus': countByStatus,
+      'byZustand': byZustand,
+      'countByZustand': countByZustand,
       'byWoodType': byWoodType,
       'countByWoodType': countByWoodType,
+      'combined': combined,
     };
   }
 
@@ -310,26 +377,58 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   // ═══════════════════════════════════════════════════════════════
 
   Widget _buildOverviewCards(ThemeProvider theme, Map<String, dynamic> stats) {
-    return Row(
+    final byZustand = stats['byZustand'] as Map<String, double>;
+
+    return Column(
       children: [
-        Expanded(
-          child: _buildStatCard(
-            theme: theme,
-            icon: Icons.inventory_2,
-            value: '${stats['totalPackages']}',
-            label: 'Pakete',
-            color: theme.primary,
-          ),
+        // Haupt-Karten
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                theme: theme,
+                icon: Icons.inventory_2,
+                value: '${stats['totalPackages']}',
+                label: 'Pakete',
+                color: theme.primary,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildStatCard(
+                theme: theme,
+                icon: Icons.view_in_ar,
+                value: _formatVolume(stats['totalVolume']),
+                label: 'Gesamt',
+                color: theme.success,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            theme: theme,
-            icon: Icons.view_in_ar,
-            value: _formatVolume(stats['totalVolume']),
-            label: 'Volumen',
-            color: theme.success,
-          ),
+        const SizedBox(height: 10),
+        // Zustand-Karten
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                theme: theme,
+                icon: Icons.water_drop,
+                value: _formatVolume(byZustand['frisch'] ?? 0),
+                label: 'Frisch',
+                color: theme.stateColors['frisch'] ?? theme.info,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildStatCard(
+                theme: theme,
+                icon: Icons.wb_sunny,
+                value: _formatVolume(byZustand['trocken'] ?? 0),
+                label: 'Trocken',
+                color: theme.stateColors['trocken'] ?? theme.success,
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -343,29 +442,33 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withOpacity(0.3)),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.textSecondary,
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                ),
+              ],
             ),
           ),
         ],
@@ -376,6 +479,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildSection({
     required ThemeProvider theme,
     required String title,
+    required IconData icon,
     required Widget child,
   }) {
     return Container(
@@ -388,20 +492,60 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: theme.textPrimary,
-            ),
+          Row(
+            children: [
+              Icon(icon, size: 18, color: theme.primary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textPrimary,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ],
       ),
     );
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ZUSTAND BREAKDOWN (NEU)
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildZustandBreakdown(ThemeProvider theme, Map<String, dynamic> stats) {
+    final byZustand = stats['byZustand'] as Map<String, double>;
+    final countByZustand = stats['countByZustand'] as Map<String, int>;
+    final total = stats['totalVolume'] as double;
+
+    final zustandLabels = {'frisch': 'Frisch', 'trocken': 'Trocken'};
+
+    return Column(
+      children: ['frisch', 'trocken'].map((zustand) {
+        final volume = byZustand[zustand] ?? 0;
+        final count = countByZustand[zustand] ?? 0;
+        final percentage = total > 0 ? (volume / total * 100) : 0;
+        final color = theme.stateColors[zustand] ?? theme.textSecondary;
+
+        return _buildBreakdownRow(
+          theme: theme,
+          label: zustandLabels[zustand] ?? zustand,
+          count: count,
+          volume: volume,
+          percentage: percentage.toDouble(),
+          color: color,
+        );
+      }).toList(),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STATUS BREAKDOWN
+  // ═══════════════════════════════════════════════════════════════
 
   Widget _buildStatusBreakdown(ThemeProvider theme, Map<String, dynamic> stats) {
     final byStatus = stats['byStatus'] as Map<String, double>;
@@ -412,96 +556,44 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       'im_lager': theme.info,
       'verarbeitet': theme.warning,
       'verkauft': theme.success,
+      'ausgebucht': theme.error,
     };
 
     final statusLabels = {
       'im_lager': 'Im Lager',
       'verarbeitet': 'Verarbeitet',
       'verkauft': 'Verkauft',
+      'ausgebucht': 'Ausgebucht',
     };
 
+    final sortedEntries = byStatus.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    if (sortedEntries.isEmpty) {
+      return _buildEmptyState(theme);
+    }
+
     return Column(
-      children: byStatus.entries.map((e) {
+      children: sortedEntries.map((e) {
         final percentage = total > 0 ? (e.value / total * 100) : 0;
         final color = statusColors[e.key] ?? theme.textSecondary;
         final count = countByStatus[e.key] ?? 0;
 
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      statusLabels[e.key] ?? e.key,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: theme.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      '$count Pakete',
-                      style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Stack(
-                  children: [
-                    Container(
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: theme.background,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: percentage / 100,
-                      child: Container(
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 70,
-                child: Text(
-                  _formatVolume(e.value),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textPrimary,
-                  ),
-                  textAlign: TextAlign.right,
-                ),
-              ),
-            ],
-          ),
+        return _buildBreakdownRow(
+          theme: theme,
+          label: statusLabels[e.key] ?? e.key,
+          count: count,
+          volume: e.value,
+          percentage: percentage.toDouble(),
+          color: color,
         );
       }).toList(),
     );
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  // WOOD TYPE BREAKDOWN
+  // ═══════════════════════════════════════════════════════════════
 
   Widget _buildWoodTypeBreakdown(ThemeProvider theme, Map<String, dynamic> stats) {
     final byWoodType = stats['byWoodType'] as Map<String, double>;
@@ -509,18 +601,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final total = stats['totalVolume'] as double;
 
     if (byWoodType.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Text(
-            'Keine Daten',
-            style: TextStyle(color: theme.textSecondary),
-          ),
-        ),
-      );
+      return _buildEmptyState(theme);
     }
 
-    // Sortiert nach Volumen
     final sorted = byWoodType.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
@@ -530,75 +613,140 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         final color = _getWoodColor(e.key);
         final count = countByWoodType[e.key] ?? 0;
 
+        return _buildBreakdownRow(
+          theme: theme,
+          label: e.key,
+          count: count,
+          volume: e.value,
+          percentage: percentage.toDouble(),
+          color: color,
+        );
+      }).toList(),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COMBINED BREAKDOWN (Holzart × Zustand) - NEU
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildCombinedBreakdown(ThemeProvider theme, Map<String, dynamic> stats) {
+    final combined = stats['combined'] as Map<String, Map<String, double>>;
+
+    if (combined.isEmpty) {
+      return _buildEmptyState(theme);
+    }
+
+    // Sortiert nach Gesamt-Volumen
+    final sorted = combined.entries.toList()
+      ..sort((a, b) {
+        final totalA = (a.value['frisch'] ?? 0) + (a.value['trocken'] ?? 0);
+        final totalB = (b.value['frisch'] ?? 0) + (b.value['trocken'] ?? 0);
+        return totalB.compareTo(totalA);
+      });
+
+    return Column(
+      children: sorted.map((e) {
+        final holzart = e.key;
+        final frisch = e.value['frisch'] ?? 0;
+        final trocken = e.value['trocken'] ?? 0;
+        final total = frisch + trocken;
+
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          child: Row(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: theme.background,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(3),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                flex: 2,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      e.key,
+              Row(
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: _getWoodColor(holzart),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      holzart,
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                         color: theme.textPrimary,
                       ),
                     ),
-                    Text(
-                      '$count Pakete',
-                      style: TextStyle(fontSize: 11, color: theme.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                flex: 3,
-                child: Stack(
-                  children: [
-                    Container(
-                      height: 20,
-                      decoration: BoxDecoration(
-                        color: theme.background,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: percentage / 100,
-                      child: Container(
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              SizedBox(
-                width: 70,
-                child: Text(
-                  _formatVolume(e.value),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textPrimary,
                   ),
-                  textAlign: TextAlign.right,
+                  Text(
+                    _formatVolume(total),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: theme.textPrimary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Stacked Bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 20,
+                  child: Row(
+                    children: [
+                      if (frisch > 0)
+                        Expanded(
+                          flex: (frisch * 100).round(),
+                          child: Container(
+                            color: theme.stateColors['frisch'],
+                            alignment: Alignment.center,
+                            child: frisch > total * 0.15
+                                ? Text(
+                              _formatVolumeShort(frisch),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            )
+                                : null,
+                          ),
+                        ),
+                      if (trocken > 0)
+                        Expanded(
+                          flex: (trocken * 100).round(),
+                          child: Container(
+                            color: theme.stateColors['trocken'],
+                            alignment: Alignment.center,
+                            child: trocken > total * 0.15
+                                ? Text(
+                              _formatVolumeShort(trocken),
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            )
+                                : null,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
+              ),
+              const SizedBox(height: 6),
+              // Legende
+              Row(
+                children: [
+                  _buildLegendItem(theme, 'Frisch', frisch, theme.stateColors['frisch']!),
+                  const SizedBox(width: 16),
+                  _buildLegendItem(theme, 'Trocken', trocken, theme.stateColors['trocken']!),
+                ],
               ),
             ],
           ),
@@ -607,14 +755,146 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     );
   }
 
+  Widget _buildLegendItem(ThemeProvider theme, String label, double value, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '$label: ${_formatVolumeShort(value)}',
+          style: TextStyle(fontSize: 11, color: theme.textSecondary),
+        ),
+      ],
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // HELPER WIDGETS
+  // ═══════════════════════════════════════════════════════════════
+
+  Widget _buildBreakdownRow({
+    required ThemeProvider theme,
+    required String label,
+    required int count,
+    required double volume,
+    required double percentage,
+    required Color color,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: theme.textPrimary,
+                  ),
+                ),
+                Text(
+                  '$count Pakete',
+                  style: TextStyle(fontSize: 10, color: theme.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Stack(
+              children: [
+                Container(
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: theme.background,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                FractionallySizedBox(
+                  widthFactor: (percentage / 100).clamp(0.0, 1.0),
+                  child: Container(
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    alignment: Alignment.centerRight,
+                    padding: const EdgeInsets.only(right: 4),
+                    child: percentage > 10
+                        ? Text(
+                      '${percentage.toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    )
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 65,
+            child: Text(
+              _formatVolume(volume),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: theme.textPrimary,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(ThemeProvider theme) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Text(
+          'Keine Daten',
+          style: TextStyle(color: theme.textSecondary),
+        ),
+      ),
+    );
+  }
+
   Color _getWoodColor(String woodType) {
-    // Deterministische Farbe basierend auf Holzart-Name
     final hash = woodType.hashCode;
     final hue = (hash % 360).toDouble().abs();
-    return HSLColor.fromAHSL(1.0, hue, 0.6, 0.5).toColor();
+    return HSLColor.fromAHSL(1.0, hue, 0.6, 0.45).toColor();
   }
 
   String _formatVolume(double v) {
     return '${v.toStringAsFixed(2).replaceAll('.', ',')} m³';
+  }
+
+  String _formatVolumeShort(double v) {
+    return '${v.toStringAsFixed(1)} m³';
   }
 }

@@ -8,15 +8,46 @@ import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import 'printer_settings_screen.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  final Function(bool)? onBottomNavChanged;
+
+  const SettingsScreen({super.key, this.onBottomNavChanged});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _showBottomNav = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _showBottomNav = prefs.getBool('show_bottom_nav') ?? true;
+    });
+  }
+
+  Future<void> _setBottomNavPreference(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('show_bottom_nav', value);
+    setState(() {
+      _showBottomNav = value;
+    });
+    widget.onBottomNavChanged?.call(value);
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.5,
+      height: MediaQuery.of(context).size.height * 0.55,
       decoration: BoxDecoration(
         color: theme.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -79,7 +110,7 @@ class SettingsScreen extends StatelessWidget {
                   title: 'Druckereinstellungen',
                   subtitle: 'Zebra-Drucker verwalten',
                   onTap: () {
-                    Navigator.pop(context); // Settings schließen
+                    Navigator.pop(context);
                     showModalBottomSheet(
                       context: context,
                       isScrollControlled: true,
@@ -87,6 +118,21 @@ class SettingsScreen extends StatelessWidget {
                       builder: (_) => const PrinterSettingsScreen(),
                     );
                   },
+                ),
+
+                const SizedBox(height: 12),
+
+                // Bottom Navigation Toggle
+                _buildSettingTile(
+                  theme: theme,
+                  icon: Icons.view_agenda_outlined,
+                  title: 'Bottom Navigation',
+                  subtitle: _showBottomNav ? 'Aktiviert' : 'Deaktiviert (nur Drawer)',
+                  trailing: Switch(
+                    value: _showBottomNav,
+                    onChanged: _setBottomNavPreference,
+                    activeColor: theme.primary,
+                  ),
                 ),
 
                 const SizedBox(height: 12),
