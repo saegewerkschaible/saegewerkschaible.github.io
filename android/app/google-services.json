@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "406446535404",
+    "project_id": "schaibleapp",
+    "storage_bucket": "schaibleapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:406446535404:android:e7d2da5cbad28b2fa7ebc9",
+        "android_client_info": {
+          "package_name": "com.schaible.saegewerk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxexGXnZCEj90t3wz9nEJrEoY5K3VDF74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
