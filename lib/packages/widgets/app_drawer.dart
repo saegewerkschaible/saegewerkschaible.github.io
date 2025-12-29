@@ -62,6 +62,18 @@ class AppDrawer extends StatelessWidget {
                       label: 'Statistik',
                       index: 2,
                     ),
+                    _buildNavItem(
+                      theme: theme,
+                      icon: Icons.receipt_long,
+                      label: 'Lieferscheine',
+                      index: 3,
+                    ),
+                    _buildNavItem(
+                      theme: theme,
+                      icon: Icons.shopping_cart,
+                      label: 'Warenkorb',
+                      index: 4,
+                    ),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

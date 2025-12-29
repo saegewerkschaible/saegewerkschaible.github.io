@@ -5,6 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:saegewerk/screens/delivery_notes/cart_screen.dart';
+import 'package:saegewerk/screens/delivery_notes/delivery_note_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../packages/widgets/app_drawer.dart';
@@ -113,7 +115,7 @@ class _StartScreenState extends State<StartScreen> {
   }
 
   AppBar _buildAppBar(ThemeProvider theme, String userName) {
-    final titles = ['Pakete', 'Lager', 'Statistik'];
+    final titles = ['Pakete', 'Lager', 'Statistik','Liefersch.', 'Warenkorb'];
 
     // Für Säger: "Neues Paket" als Titel
     final title = _userGroup >= 2 ? titles[_currentIndex] : 'Neues Paket';
@@ -134,15 +136,15 @@ class _StartScreenState extends State<StartScreen> {
                   fit: BoxFit.contain,
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: theme.textPrimary,
-                ),
-              ),
+              // const SizedBox(width: 12),
+              // Text(
+              //   title,
+              //   style: TextStyle(
+              //     fontSize: 18,
+              //     fontWeight: FontWeight.w600,
+              //     color: theme.textPrimary,
+              //   ),
+              // ),
             ],
           ),
         ),
@@ -180,12 +182,35 @@ class _StartScreenState extends State<StartScreen> {
         return PackagesScreen(userGroup: _userGroup);
       case 2:
         return StatisticsScreen(userGroup: _userGroup);
+      case 3:
+        return DeliveryNoteScreen();
+      case 4:
+        return CartScreen(userGroup: _userGroup);
       default:
         return ScannerScreen(userGroup: _userGroup);
     }
   }
-
   Widget _buildBottomNav(ThemeProvider theme) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    const int itemCount = 5;
+    const double itemWidth = 72.0;
+    const double totalItemsWidth = itemCount * itemWidth;
+
+    // Wenn alle Items reinpassen -> zentrieren, sonst scrollen
+    final bool needsScroll = screenWidth < totalItemsWidth + 32;
+
+    final navItems = Row(
+      mainAxisAlignment: needsScroll ? MainAxisAlignment.start : MainAxisAlignment.center,
+      mainAxisSize: needsScroll ? MainAxisSize.min : MainAxisSize.max,
+      children: [
+        _buildNavItem(theme: theme, icon: Icons.qr_code_scanner, label: 'Pakete', index: 0),
+        _buildNavItem(theme: theme, icon: Icons.inventory_2, label: 'Lager', index: 1),
+        _buildNavItem(theme: theme, icon: Icons.bar_chart, label: 'Statistik', index: 2),
+        _buildNavItem(theme: theme, icon: Icons.receipt_long, label: 'Lieferung', index: 3),
+        _buildNavItem(theme: theme, icon: Icons.shopping_cart, label: 'Warenkorb', index: 4),
+      ],
+    );
+
     return Container(
       decoration: BoxDecoration(
         color: theme.surface,
@@ -193,15 +218,14 @@ class _StartScreenState extends State<StartScreen> {
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              _buildNavItem(theme: theme, icon: Icons.qr_code_scanner, label: 'Pakete', index: 0),
-              _buildNavItem(theme: theme, icon: Icons.inventory_2, label: 'Lager', index: 1),
-              _buildNavItem(theme: theme, icon: Icons.bar_chart, label: 'Statistik', index: 2),
-            ],
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: needsScroll
+              ? SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: navItems,
+          )
+              : navItems,
         ),
       ),
     );
@@ -219,7 +243,8 @@ class _StartScreenState extends State<StartScreen> {
       onTap: () => setState(() => _currentIndex = index),
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        width: 72,
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? theme.primary.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -232,10 +257,13 @@ class _StartScreenState extends State<StartScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 color: isSelected ? theme.primary : theme.textSecondary,
               ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

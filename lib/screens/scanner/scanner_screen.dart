@@ -119,7 +119,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           color: theme.primaryLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.edit, color: theme.primary, size: 24),
+                        child: Icon(Icons.edit, color: Colors.white, size: 24),
                       ),
                       const SizedBox(width: 16),
                       Text(
@@ -191,7 +191,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           color: theme.primaryLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.edit, color: theme.primary, size: 24),
+                        child: Icon(Icons.edit, color: Colors.white, size: 24),
                       ),
                       const SizedBox(width: 16),
                       Text(
@@ -259,7 +259,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           color: theme.primaryLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.add, color: theme.primary, size: 24),
+                        child: Icon(Icons.add, color: Colors.white, size: 24),
                       ),
                       const SizedBox(width: 16),
                       Text(
@@ -329,7 +329,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           color: theme.primaryLight,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.add, color: theme.primary, size: 24),
+                        child: Icon(Icons.add, color: Colors.white, size: 24),
                       ),
                       const SizedBox(width: 16),
                       Text(

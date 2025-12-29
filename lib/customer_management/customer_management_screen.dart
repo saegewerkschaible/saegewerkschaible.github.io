@@ -162,7 +162,7 @@ class CustomerManagementScreenState extends State<CustomerManagementScreen> {
               iconName: 'search',
               defaultIcon: Icons.search,
               size: 18,
-              color: theme.primary,
+              color: Colors.white,
             ),
           ),
           suffixIcon: searchQuery.isNotEmpty

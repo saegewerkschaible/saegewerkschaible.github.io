@@ -2,7 +2,7 @@ name: saegewerk
 description: "Schaible Sägewerk App"
 publish_to: 'none'
 
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: ^3.10.0-236.0.dev
@@ -15,10 +15,16 @@ dependencies:
   firebase_core: ^3.2.0
   firebase_auth: ^5.1.2
   cloud_firestore: ^5.1.0
+  firebase_storage: ^12.1.0
 
   # State Management
   provider: ^6.1.2
 
+  pdf: ^3.11.1
+
+  url_launcher: ^6.3.1
+  path_provider: ^2.1.5
+  share_plus: ^10.0.0
   package_info_plus: ^9.0.0
   fluttertoast: ^8.2.12
   mobile_scanner: ^7.1.4

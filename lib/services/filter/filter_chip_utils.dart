@@ -1,125 +1,72 @@
-// lib/services/filter/filter_chip_utils.dart
+// ═══════════════════════════════════════════════════════════════════════════
+// lib/roundwood/widgets/filter_chip_widget.dart
+// Wiederverwendbares Filter-Chip Widget mit ThemeProvider-Integration
+// ═══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 
+import 'package:saegewerk/services/icon_helper.dart';
 
-import '../../services/icon_helper.dart';
-
-/// Utility-Funktion zum Erstellen von Filter-Chips
-/// (Falls du die alte buildFilterChip Funktion noch brauchst)
+/// Filter-Chip für die Anzeige aktiver Filter
+///
+/// Zeigt einen Filter mit Icon, Label und Close-Button
+/// Verwendet automatisch die Farben aus dem aktiven Theme
 Widget buildFilterChip({
+  required BuildContext context,
   required String label,
   required VoidCallback onDelete,
   required IconData icon,
   required String iconName,
   Color? color,
 }) {
-  return Builder(
-    builder: (context) {
-      final colors = Provider.of<ThemeProvider>(context).colors;
-      final chipColor = color ?? colors.primary;
+  final colors = Provider.of<ThemeProvider>(context, listen: false).colors;
+  final chipColor = color ?? colors.primary;
 
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: chipColor.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: chipColor.withOpacity(0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            getAdaptiveIcon(
-              iconName: iconName,
-              defaultIcon: icon,
-              size: 14,
-              color: chipColor,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: chipColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 4),
-            GestureDetector(
-              onTap: onDelete,
-              child: Icon(
-                Icons.close,
-                size: 14,
-                color: chipColor,
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-/// Stateless Widget Version für bessere Performance
-class FilterChipWidget extends StatelessWidget {
-  final String label;
-  final VoidCallback onDelete;
-  final IconData icon;
-  final String iconName;
-  final Color? color;
-
-  const FilterChipWidget({
-    Key? key,
-    required this.label,
-    required this.onDelete,
-    required this.icon,
-    required this.iconName,
-    this.color,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Provider.of<ThemeProvider>(context).colors;
-    final chipColor = color ?? colors.primary;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: chipColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: chipColor.withOpacity(0.3)),
+  return Container(
+    decoration: BoxDecoration(
+      color: chipColor.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(
+        color: chipColor.withOpacity(0.2),
       ),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           getAdaptiveIcon(
             iconName: iconName,
             defaultIcon: icon,
-            size: 14,
+            size: 16,
             color: chipColor,
           ),
           const SizedBox(width: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 13,
               color: chipColor,
-              fontWeight: FontWeight.w500,
             ),
           ),
           const SizedBox(width: 4),
-          GestureDetector(
+          InkWell(
             onTap: onDelete,
-            child: Icon(
-              Icons.close,
-              size: 14,
-              color: chipColor,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(2),
+              child: getAdaptiveIcon(
+                iconName: 'close',
+                defaultIcon: Icons.close,
+                size: 16,
+                color: chipColor,
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
 }

@@ -70,6 +70,15 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   // Validation
   Map<String, bool> invalidFields = {};
 
+  // Pin-State
+  bool _pinHolzart = false;
+  bool _pinKunde = false;
+  bool _pinLagerort = false;
+
+  DocumentReference get _pinSettingsRef => FirebaseFirestore.instance
+      .collection('settings')
+      .doc('package_pins');
+
   // Labels
   static const String LABEL_HOLZART = 'Holzart';
   static const String LABEL_STAERKE = 'Stärke [mm]';
@@ -81,11 +90,83 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   void initState() {
     super.initState();
     _initControllers();
+    _loadPinSettings();
     if (widget.isNewPackage) {
       _loadNextBarcode();
     }
   }
+  // NEU: Pin-Einstellungen laden
+  Future<void> _loadPinSettings() async {
+    try {
+      final doc = await _pinSettingsRef.get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        setState(() {
+          _pinHolzart = data['holzart'] ?? false;
+          _pinKunde = data['kunde'] ?? false;
+          _pinLagerort = data['lagerort'] ?? false;
 
+          // Gepinnte Werte laden
+          if (_pinHolzart && data['holzartValue'] != null) {
+            holzartController.text = data['holzartValue'];
+          }
+          if (_pinKunde && data['kundeValue'] != null) {
+            kundeController.text = data['kundeValue'];
+          }
+          if (_pinLagerort && data['lagerortValue'] != null) {
+            lagerortController.text = data['lagerortValue'];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Fehler beim Laden der Pin-Einstellungen: $e');
+    }
+  }
+
+  // NEU: Pin-Einstellung speichern
+  Future<void> _togglePin(String field) async {
+    setState(() {
+      switch (field) {
+        case 'holzart':
+          _pinHolzart = !_pinHolzart;
+          break;
+        case 'kunde':
+          _pinKunde = !_pinKunde;
+          break;
+        case 'lagerort':
+          _pinLagerort = !_pinLagerort;
+          break;
+      }
+    });
+
+    try {
+      await _pinSettingsRef.set({
+        'holzart': _pinHolzart,
+        'kunde': _pinKunde,
+        'lagerort': _pinLagerort,
+        'holzartValue': _pinHolzart ? holzartController.text : null,
+        'kundeValue': _pinKunde ? kundeController.text : null,
+        'lagerortValue': _pinLagerort ? lagerortController.text : null,
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Fehler beim Speichern der Pin-Einstellungen: $e');
+    }
+  }
+
+  // NEU: Gepinnte Werte aktualisieren wenn sich Feld ändert
+  Future<void> _updatePinnedValue(String field, String value) async {
+    if ((field == 'holzart' && _pinHolzart) ||
+        (field == 'kunde' && _pinKunde) ||
+        (field == 'lagerort' && _pinLagerort)) {
+      try {
+        await _pinSettingsRef.set({
+          '${field}Value': value,
+        }, SetOptions(merge: true));
+      } catch (e) {
+        debugPrint('Fehler beim Aktualisieren des gepinnten Werts: $e');
+      }
+    }
+  }
   Future<void> _handlePrint() async {
     final saved = await _saveChanges();
     if (!saved) return;
@@ -269,6 +350,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
     }
   }
 
+  // ANPASSEN: _clearFieldsForNextPackage
   void _clearFieldsForNextPackage() {
     setState(() {
       nrExtController.clear();
@@ -276,6 +358,11 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       stkController.clear();
       mengeController.text = '0.000';
       bemerkungController.clear();
+
+      // Nur leeren wenn NICHT gepinnt
+      if (!_pinHolzart) holzartController.clear();
+      if (!_pinKunde) kundeController.clear();
+      if (!_pinLagerort) lagerortController.clear();
     });
   }
 
@@ -339,6 +426,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                     saegerController: saegerController,
                     invalidFields: invalidFields,
                     packageService: _packageService,
+                    pinHolzart: _pinHolzart,           // NEU
+                    pinKunde: _pinKunde,               // NEU
+                    onTogglePin: _togglePin,           // NEU
+                    onPinnedValueChanged: _updatePinnedValue,  // NEU
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -411,6 +502,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                   child: LocationSection(
                     controller: lagerortController,
                     packageService: _packageService,
+                    isPinned: _pinLagerort,
+                    onTogglePin: () => _togglePin('lagerort'),
+                    onChanged: (v) => _updatePinnedValue('lagerort', v),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -490,6 +584,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
               saegerController: saegerController,
               invalidFields: invalidFields,
               packageService: _packageService,
+              pinHolzart: _pinHolzart,
+              pinKunde: _pinKunde,
+              onTogglePin: _togglePin,
+              onPinnedValueChanged: _updatePinnedValue,
             ),
           ),
           const SizedBox(height: 8),
@@ -546,6 +644,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
             child: LocationSection(
               controller: lagerortController,
               packageService: _packageService,
+              isPinned: _pinLagerort,
+              onTogglePin: () => _togglePin('lagerort'),
+              onChanged: (v) => _updatePinnedValue('lagerort', v),
+
             ),
           ),
           const SizedBox(height: 8),
@@ -714,7 +816,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
             child: OutlinedButton.icon(
               onPressed: _saveChanges,
               icon: const Icon(Icons.save),
-              label: const Text('Nur Speichern'),
+              label: const Text('Nur Erstellen'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: theme.primary,
                 side: BorderSide(color: theme.primary),

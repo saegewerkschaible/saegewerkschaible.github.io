@@ -28,6 +28,12 @@ class MainInfoSection extends StatefulWidget {
   final Map<String, bool> invalidFields;
   final PackageService packageService;
 
+  // Pin-Properties
+  final bool pinHolzart;
+  final bool pinKunde;
+  final Function(String) onTogglePin;
+  final Function(String, String) onPinnedValueChanged;
+
   const MainInfoSection({
     super.key,
     required this.isNewPackage,
@@ -40,6 +46,10 @@ class MainInfoSection extends StatefulWidget {
     required this.saegerController,
     required this.invalidFields,
     required this.packageService,
+    this.pinHolzart = false,
+    this.pinKunde = false,
+    required this.onTogglePin,
+    required this.onPinnedValueChanged,
   });
 
   @override
@@ -107,7 +117,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
         ),
         const SizedBox(height: 24),
 
-        // Holzart
+        // Holzart MIT PIN
         StreamBuilder<QuerySnapshot>(
           stream: widget.packageService.getWoodTypesStream(),
           builder: (context, snapshot) {
@@ -115,7 +125,8 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                 ? snapshot.data!.docs.map((d) => d['name'] as String).toList()
                 : <String>[];
 
-            return SelectField(
+            return _buildPinnableSelectField(
+              context: context,
               label: 'Holzart',
               controller: widget.holzartController,
               options: options,
@@ -123,23 +134,15 @@ class _MainInfoSectionState extends State<MainInfoSection> {
               iconName: 'forest',
               isRequired: true,
               isInvalid: widget.invalidFields['Holzart'] == true,
-              onTap: () => showSelectionBottomSheet(
-                context: context,
-                title: 'Holzart',
-                options: options,
-                controller: widget.holzartController,
-                allowCustomInput: false,
-                onSelect: (v) {
-                  widget.holzartController.text = v;
-                  setState(() {}); // <-- HIER: Widget neu bauen
-                },
-              ),
+              isPinned: widget.pinHolzart,
+              pinField: 'holzart',
+              allowCustomInput: false,
             );
           },
         ),
         const SizedBox(height: 12),
 
-        // Kunde
+        // Kunde MIT PIN
         StreamBuilder<QuerySnapshot>(
           stream: widget.packageService.getCustomersStream(),
           builder: (context, snapshot) {
@@ -147,25 +150,125 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                 ? snapshot.data!.docs.map((d) => d['name'] as String).toList()
                 : <String>[];
 
-            return SelectField(
+            return _buildPinnableSelectField(
+              context: context,
               label: 'Kunde',
               controller: widget.kundeController,
               options: options,
               icon: Icons.person,
               iconName: 'person',
-              onTap: () => showSelectionBottomSheet(
-                context: context,
-                title: 'Kunde',
-                options: options,
-                controller: widget.kundeController,
-                allowCustomInput: true,
-                onSelect: (v) {
-                  widget.kundeController.text = v;
-                  setState(() {}); // <-- HIER: Widget neu bauen
-                },
-              ),
+              isRequired: false,
+              isInvalid: false,
+              isPinned: widget.pinKunde,
+              pinField: 'kunde',
+              allowCustomInput: true,
             );
           },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPinnableSelectField({
+    required BuildContext context,
+    required String label,
+    required TextEditingController controller,
+    required List<String> options,
+    required IconData icon,
+    required String iconName,
+    required bool isRequired,
+    required bool isInvalid,
+    required bool isPinned,
+    required String pinField,
+    required bool allowCustomInput,
+  }) {
+    final theme = context.watch<ThemeProvider>();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Label-Zeile mit Pin-Button
+        Row(
+          children: [
+            Icon(icon, size: 16, color: theme.textSecondary),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: theme.textSecondary,
+              ),
+            ),
+            if (isRequired)
+              Text(' *', style: TextStyle(color: theme.error, fontSize: 12)),
+            const Spacer(),
+            _PinButton(
+              isPinned: isPinned,
+              onToggle: () => widget.onTogglePin(pinField),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Select Field
+        GestureDetector(
+          onTap: () => showSelectionBottomSheet(
+            context: context,
+            title: label,
+            options: options,
+            controller: controller,
+            allowCustomInput: allowCustomInput,
+            onSelect: (v) {
+              controller.text = v;
+              widget.onPinnedValueChanged(pinField, v);
+              setState(() {});
+            },
+          ),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isPinned
+                  ? theme.primary.withOpacity(0.05)
+                  : theme.background,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isInvalid
+                    ? theme.error
+                    : isPinned
+                    ? theme.primary
+                    : theme.border,
+                width: isPinned ? 2 : 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    controller.text.isEmpty ? 'Auswählen...' : controller.text,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: controller.text.isEmpty
+                          ? theme.textHint
+                          : theme.textPrimary,
+                      fontWeight: isPinned ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
+                ),
+                if (isPinned)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(
+                      Icons.push_pin,
+                      size: 16,
+                      color: theme.primary,
+                    ),
+                  ),
+                Icon(Icons.arrow_drop_down, color: theme.textSecondary),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -214,6 +317,56 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                 fontSize: 14,
                 color: controller.text.isEmpty ? theme.textSecondary : theme.textPrimary,
                 fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Pin-Button Widget
+class _PinButton extends StatelessWidget {
+  final bool isPinned;
+  final VoidCallback onToggle;
+
+  const _PinButton({
+    required this.isPinned,
+    required this.onToggle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.watch<ThemeProvider>();
+
+    return GestureDetector(
+      onTap: onToggle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: isPinned ? theme.primary : theme.background,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isPinned ? theme.primary : theme.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+              size: 14,
+              color: isPinned ? Colors.white : theme.textSecondary,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              isPinned ? 'Gepinnt' : 'Pinnen',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isPinned ? Colors.white : theme.textSecondary,
               ),
             ),
           ],

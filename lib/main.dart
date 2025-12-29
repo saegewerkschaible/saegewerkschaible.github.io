@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:saegewerk/screens/delivery_notes/services/cart_provider.dart';
 import 'package:saegewerk/services/filter/filter_settings.dart';
 
 import 'firebase_options.dart';
@@ -33,6 +34,8 @@ void main() async {
       providers: [
         ChangeNotifierProvider.value(value: themeProvider),
         ChangeNotifierProvider(create: (_) => FilterSettings()), // NEU
+        ChangeNotifierProvider(create: (_) => CartProvider()), // NEU
+
       ],
       child: SchaibleApp(isLoggedIn: isLoggedIn),
     ),

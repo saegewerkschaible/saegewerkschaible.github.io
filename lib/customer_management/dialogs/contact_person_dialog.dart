@@ -83,7 +83,7 @@ class _ContactPersonDialogState extends State<ContactPersonDialog> {
                       child: getAdaptiveIcon(
                         iconName: isEditing ? 'edit' : 'person_add',
                         defaultIcon: isEditing ? Icons.edit : Icons.person_add,
-                        color: theme.primary,
+                        color: Colors.white,
                       ),
                     ),
                     const SizedBox(width: 16),
