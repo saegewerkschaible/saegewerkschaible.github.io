@@ -99,6 +99,8 @@ class CustomerDetailsView extends StatelessWidget {
                           ],
                         ),
                       ],
+                      const SizedBox(height: 24),
+                      _buildEmailSettingsSection(theme, customer),
 
                       const SizedBox(height: 16),
 
@@ -337,6 +339,88 @@ class CustomerDetailsView extends StatelessWidget {
           _buildDetailRow(theme, 'E-Mail', customer.email!),
         if (customer.website != null)
           _buildDetailRow(theme, 'Website', customer.website!),
+      ],
+    );
+  }
+  Widget _buildEmailSettingsSection(dynamic theme, Customer customer) {
+    if (customer.email == null || customer.email!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return CustomerDetailSection(
+      title: 'Lieferschein per Email',
+      icon: 'email',
+      children: [
+        // Hauptschalter
+        _buildSettingRow(
+          theme,
+          'Erhält Lieferscheine',
+          customer.emailReceivesDeliveryNote,
+          customer.emailReceivesDeliveryNote ? theme.success : theme.textSecondary,
+        ),
+
+        if (customer.emailReceivesDeliveryNote) ...[
+          const SizedBox(height: 8),
+          Divider(color: theme.border, height: 1),
+          const SizedBox(height: 8),
+
+          // PDF Einstellung
+          _buildSettingRow(
+            theme,
+            'PDF-Anhang',
+            customer.emailSendPdf,
+            customer.emailSendPdf ? theme.primary : theme.textSecondary,
+          ),
+
+          const SizedBox(height: 4),
+
+          // JSON Einstellung
+          _buildSettingRow(
+            theme,
+            'JSON-Export (Datenimport)',
+            customer.emailSendJson,
+            customer.emailSendJson ? theme.primary : theme.textSecondary,
+          ),
+        ],
+
+        const SizedBox(height: 12),
+        Text(
+          'Diese Einstellungen werden beim Erstellen von Lieferscheinen verwendet.',
+          style: TextStyle(
+            fontSize: 11,
+            color: theme.textSecondary,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingRow(dynamic theme, String label, bool isActive, Color activeColor) {
+    return Row(
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: isActive ? activeColor.withOpacity(0.1) : theme.background,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isActive ? activeColor : theme.border,
+            ),
+          ),
+          child: isActive
+              ? Icon(Icons.check, size: 14, color: activeColor)
+              : null,
+        ),
+        const SizedBox(width: 12),
+        Text(
+          label,
+          style: TextStyle(
+            color: isActive ? theme.textPrimary : theme.textSecondary,
+            fontWeight: isActive ? FontWeight.w500 : FontWeight.normal,
+          ),
+        ),
       ],
     );
   }

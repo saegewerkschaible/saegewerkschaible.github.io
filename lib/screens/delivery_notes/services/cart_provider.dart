@@ -97,6 +97,48 @@ class CartProvider extends ChangeNotifier {
   bool get isNotEmpty => _items.isNotEmpty;
   int get itemCount => _items.length;
 
+  /// Prüft ob Kunde eine Email hat
+  bool get customerHasEmail {
+    if (_selectedCustomer == null) return false;
+    final email = _selectedCustomer!['email']?.toString() ?? '';
+    return email.isNotEmpty;
+  }
+
+  /// Prüft ob Kunde Lieferscheine per Email erhält
+  bool get customerReceivesEmail {
+    if (!customerHasEmail) return false;
+    final settings = _selectedCustomer!['emailSettings'] as Map<String, dynamic>?;
+    return settings?['receivesDeliveryNote'] ?? true;
+  }
+
+  /// Email-Einstellungen des Kunden
+  Map<String, dynamic> get customerEmailSettings {
+    final settings = _selectedCustomer?['emailSettings'] as Map<String, dynamic>?;
+    return {
+      'receivesDeliveryNote': settings?['receivesDeliveryNote'] ?? true,
+      'sendPdf': settings?['sendPdf'] ?? true,
+      'sendJson': settings?['sendJson'] ?? false,
+    };
+  }
+
+  /// Beschreibung für UI
+  String get customerEmailDescription {
+    if (!customerHasEmail) return '';
+    if (!customerReceivesEmail) return 'Email deaktiviert';
+
+    final settings = customerEmailSettings;
+    final parts = <String>[];
+    if (settings['sendPdf'] == true) parts.add('PDF');
+    if (settings['sendJson'] == true) parts.add('JSON');
+
+    if (parts.isEmpty) return 'Keine Anhänge';
+    return 'Erhält: ${parts.join(' + ')}';
+  }
+
+  /// Zeige Email-Leiste?
+  bool get showEmailInfo => customerHasEmail;
+
+
   /// Gesamtvolumen aller Pakete
   double get totalVolume => _items.fold(0.0, (sum, item) => sum + item.menge);
 

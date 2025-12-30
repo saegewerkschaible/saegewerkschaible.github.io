@@ -1,5 +1,6 @@
 // lib/screens/delivery_notes/services/delivery_note_service.dart
 
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -33,17 +34,26 @@ class DeliveryNoteService {
       // 3. PDF in Storage hochladen
       final pdfUrl = await _uploadPDF(pdfBytes, number);
 
-      // 4. Lieferschein in Firestore speichern
+      // 4. NEU: JSON generieren und hochladen
+      final jsonData = generateExportJson(
+        items: items,
+        customer: customer,
+        number: number,
+      );
+      final jsonUrl = await _uploadJSON(jsonData, number);
+
+      // 5. Lieferschein in Firestore speichern
       final deliveryNoteData = {
         'number': number,
         'createdAt': FieldValue.serverTimestamp(),
         'customerName': customer?['name'] ?? 'Direktverkauf',
-        'customerData': customer,
+        'customerData': customer,  // Enthält auch emailSettings!
         'totalVolume': items.fold<double>(0, (sum, item) => sum + item.menge),
         'totalQuantity': items.fold<int>(0, (sum, item) => sum + item.stueckzahl),
         'itemCount': items.length,
         'items': items.map((item) => item.toMap()).toList(),
         'pdfUrl': pdfUrl,
+        'jsonUrl': jsonUrl,  // NEU
         'status': 'completed',
       };
 
@@ -141,7 +151,8 @@ class DeliveryNoteService {
     required List<CartItem> items,
     Map<String, dynamic>? customer,
     required String number,
-  }) async {
+  }) async
+  {
     final pdf = pw.Document();
 
     // Logo laden (optional)
@@ -186,6 +197,79 @@ class DeliveryNoteService {
 
     return pdf.save();
   }
+  /// Generiert den JSON-Export für den Lieferschein
+  static Map<String, dynamic> generateExportJson({
+    required List<CartItem> items,
+    Map<String, dynamic>? customer,
+    required String number,
+  }) {
+    final now = DateTime.now();
+
+    return {
+      'version': '1.0',
+      'exportiertAm': now.toIso8601String(),
+      'lieferschein': {
+        'nummer': number,
+        'datum': DateFormat('dd.MM.yyyy').format(now),
+        'erstelltUm': now.toIso8601String(),
+      },
+      'absender': {
+        'firma': 'Sägewerk Schaible',
+        'strasse': 'Hagelenweg 1a',
+        'plz': '78652',
+        'ort': 'Deißlingen',
+        'telefon': '07420-1332',
+        'email': 'info@saegewerk-schaible.de',
+      },
+      'empfaenger': {
+        'name': customer?['name'] ?? '',
+        'strasse': customer?['street'] ?? '',
+        'hausnummer': customer?['houseNumber'] ?? '',
+        'plz': customer?['zipCode'] ?? '',
+        'ort': customer?['city'] ?? '',
+        'email': customer?['email'] ?? '',
+      },
+      'positionen': items.asMap().entries.map((entry) {
+        final item = entry.value;
+        return {
+          'position': entry.key + 1,
+          'barcode': item.barcode,
+          'nrExt': item.nrExt,
+          'holzart': item.holzart,
+          'hoehe': item.hoehe,
+          'breite': item.breite,
+          'laenge': item.laenge,
+          'stueckzahl': item.stueckzahl,
+          'menge': item.menge,
+          'zustand': item.zustand,
+          'bemerkung': item.bemerkung,
+        };
+      }).toList(),
+      'summen': {
+        'anzahlPakete': items.length,
+        'gesamtStueckzahl': items.fold<int>(0, (sum, item) => sum + item.stueckzahl),
+        'gesamtVolumen': items.fold<double>(0, (sum, item) => sum + item.menge),
+      },
+    };
+  }
+
+  /// Lädt JSON in Firebase Storage hoch
+  static Future<String> _uploadJSON(Map<String, dynamic> jsonData, String number) async {
+    final now = DateTime.now();
+    final ref = _storage
+        .ref()
+        .child('delivery_notes')
+        .child(now.year.toString())
+        .child(now.month.toString().padLeft(2, '0'))
+        .child('LS_$number.json');
+
+    final jsonString = const JsonEncoder.withIndent('  ').convert(jsonData);
+    final bytes = Uint8List.fromList(utf8.encode(jsonString));
+
+    await ref.putData(bytes, SettableMetadata(contentType: 'application/json'));
+    return await ref.getDownloadURL();
+  }
+
 
   static pw.Widget _buildPdfHeader(String number, pw.MemoryImage? logo) {
     return pw.Row(

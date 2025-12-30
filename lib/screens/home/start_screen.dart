@@ -19,8 +19,6 @@ import '../../core/theme/theme_provider.dart';
 import '../../services/auth_service.dart';
 import '../../constants.dart';
 
-import '../admin/user_management_screen.dart';
-import '../admin/admin_screen.dart';
 import '../settings/settings_screen.dart';
 
 class StartScreen extends StatefulWidget {
@@ -115,11 +113,6 @@ class _StartScreenState extends State<StartScreen> {
   }
 
   AppBar _buildAppBar(ThemeProvider theme, String userName) {
-    final titles = ['Pakete', 'Lager', 'Statistik','Liefersch.', 'Warenkorb'];
-
-    // Für Säger: "Neues Paket" als Titel
-    final title = _userGroup >= 2 ? titles[_currentIndex] : 'Neues Paket';
-
     return AppBar(
       backgroundColor: theme.surface,
       elevation: 0,
@@ -136,36 +129,11 @@ class _StartScreenState extends State<StartScreen> {
                   fit: BoxFit.contain,
                 ),
               ),
-              // const SizedBox(width: 12),
-              // Text(
-              //   title,
-              //   style: TextStyle(
-              //     fontSize: 18,
-              //     fontWeight: FontWeight.w600,
-              //     color: theme.textPrimary,
-              //   ),
-              // ),
             ],
           ),
         ),
       ),
       actions: [
-        if (_userGroup >= 3)
-          IconButton(
-            icon: Icon(Icons.settings, color: theme.textPrimary),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AdminScreen()),
-            ),
-          ),
-        if (_userGroup >= 3)
-          IconButton(
-            icon: Icon(Icons.people_outline, color: theme.textPrimary),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const UserManagementScreen()),
-            ),
-          ),
         IconButton(
           icon: Icon(Icons.settings_outlined, color: theme.textPrimary),
           onPressed: () => _showSettings(context),
@@ -190,6 +158,7 @@ class _StartScreenState extends State<StartScreen> {
         return ScannerScreen(userGroup: _userGroup);
     }
   }
+
   Widget _buildBottomNav(ThemeProvider theme) {
     final screenWidth = MediaQuery.of(context).size.width;
     const int itemCount = 5;
@@ -281,10 +250,9 @@ class _StartScreenState extends State<StartScreen> {
       packageData: null,
       userGroup: _userGroup,
       isNewPackage: true,
-      isEmbedded: true, // Neuer Parameter für eingebetteten Modus
+      isEmbedded: true,
       onSaved: (success) {
         if (success) {
-          // Widget neu laden für nächstes Paket
           setState(() {
             _editPackageKey = UniqueKey();
           });

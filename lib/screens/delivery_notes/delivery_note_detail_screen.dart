@@ -1,15 +1,21 @@
 // lib/screens/DeliveryNotes/delivery_note_detail_screen.dart
 
+import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
+
+// Conditional imports für Web/Mobile
+import 'services/file_helper.dart';
 
 import '../../services/icon_helper.dart';
 
 import 'widgets/package_card.dart';
-import 'widgets/info_chips.dart';
 import 'dialogs/delete_package_dialog.dart';
 import 'dialogs/delete_delivery_note_dialog.dart';
 
@@ -37,7 +43,6 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
     }
 
     return FirebaseFirestore.instance
-
         .collection('packages')
         .where(FieldPath.documentId, whereIn: packageIds)
         .snapshots();
@@ -53,6 +58,60 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
     return null;
   }
 
+  // ════════════════════════════════════════════════════════════════════════════
+  // ÖFFNEN / DOWNLOAD
+  // ════════════════════════════════════════════════════════════════════════════
+  Future<void> _openFile(BuildContext context, String? url, String type) async {
+    final colors = Provider.of<ThemeProvider>(context, listen: false).colors;
+
+    if (url == null || url.isEmpty) {
+      _showSnackbar(context, 'Keine $type-Datei verfügbar', colors.error);
+      return;
+    }
+
+    try {
+      final Uri uri = Uri.parse(url);
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      _showSnackbar(context, '$type wird geöffnet...', colors.success);
+    } catch (e) {
+      _showSnackbar(context, 'Fehler beim Öffnen: $e', colors.error);
+    }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // TEILEN (Web + Mobile)
+  // ════════════════════════════════════════════════════════════════════════════
+  Future<void> _shareFile(
+      BuildContext context,
+      String? url,
+      String fileName,
+      String type,
+      ) async {
+    final colors = Provider.of<ThemeProvider>(context, listen: false).colors;
+
+    if (url == null || url.isEmpty) {
+      _showSnackbar(context, 'Keine $type-Datei verfügbar', colors.error);
+      return;
+    }
+
+    try {
+      await FileHelper.shareFile(
+        context: context,
+        url: url,
+        fileName: fileName,
+        fileType: type,
+      );
+    } catch (e) {
+      _showSnackbar(context, 'Fehler beim Teilen: $e', colors.error);
+    }
+  }
+
+  void _showSnackbar(BuildContext context, String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Provider.of<ThemeProvider>(context).colors;
@@ -65,6 +124,8 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
     final double totalVolume =
         (widget.deliveryNote['totalVolume'] as num?)?.toDouble() ?? 0.0;
     final int totalQuantity = widget.deliveryNote['totalQuantity'] ?? 0;
+    final String? pdfUrl = widget.deliveryNote['pdfUrl'];
+    final String? jsonUrl = widget.deliveryNote['jsonUrl'];
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -121,6 +182,9 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
             formatter,
             totalQuantity,
             totalVolume,
+            pdfUrl,
+            jsonUrl,
+            number,
           ),
 
           // Pakete Liste
@@ -208,6 +272,9 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
       DateFormat formatter,
       int totalQuantity,
       double totalVolume,
+      String? pdfUrl,
+      String? jsonUrl,
+      String number,
       ) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -284,9 +351,7 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Trennlinie
           Divider(color: colors.border, height: 1),
-
           const SizedBox(height: 16),
 
           // Info Cards
@@ -321,12 +386,197 @@ class _DeliveryNoteDetailScreenState extends State<DeliveryNoteDetailScreen> {
               ),
             ],
           ),
+
+          const SizedBox(height: 16),
+          Divider(color: colors.border, height: 1),
+          const SizedBox(height: 16),
+
+          // ════════════════════════════════════════════════════════════════════
+          // DOWNLOAD & SHARE BUTTONS
+          // ════════════════════════════════════════════════════════════════════
+
+          // PDF Buttons
+          _buildFileSection(
+            context,
+            colors,
+            label: 'PDF Lieferschein',
+            icon: Icons.picture_as_pdf,
+            color: colors.error,
+            url: pdfUrl,
+            fileName: 'Lieferschein_$number.pdf',
+            fileType: 'PDF',
+          ),
+
+          const SizedBox(height: 12),
+
+          // JSON Buttons
+          _buildFileSection(
+            context,
+            colors,
+            label: 'JSON Export',
+            icon: Icons.data_object,
+            color: colors.info,
+            url: jsonUrl,
+            fileName: 'Lieferschein_$number.json',
+            fileType: 'JSON',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFileSection(
+      BuildContext context,
+      dynamic colors, {
+        required String label,
+        required IconData icon,
+        required Color color,
+        required String? url,
+        required String fileName,
+        required String fileType,
+      }) {
+    final isAvailable = url != null && url.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isAvailable ? color.withOpacity(0.05) : colors.background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isAvailable ? color.withOpacity(0.3) : colors.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Icon + Label
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isAvailable
+                  ? color.withOpacity(0.15)
+                  : colors.textSecondary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: isAvailable ? color : colors.textSecondary,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isAvailable ? colors.textPrimary : colors.textSecondary,
+                  ),
+                ),
+                Text(
+                  isAvailable ? fileName : 'Nicht verfügbar',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Action Buttons
+          if (isAvailable) ...[
+            // Download/Öffnen Button
+            _ActionButton(
+              icon: kIsWeb ? Icons.download : Icons.open_in_new,
+              label: kIsWeb ? 'Download' : 'Öffnen',
+              color: color,
+              onPressed: () => _openFile(context, url, fileType),
+            ),
+            const SizedBox(width: 8),
+            // Share/Copy Button
+            _ActionButton(
+              icon: kIsWeb ? Icons.copy : Icons.share,
+              label: kIsWeb ? 'Link' : 'Teilen',
+              color: color,
+              onPressed: () => _shareFile(context, url, fileName, fileType),
+            ),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: colors.textSecondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'N/A',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: colors.textSecondary,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ACTION BUTTON WIDGET
+// ══════════════════════════════════════════════════════════════════════════════
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const _ActionButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INFO CARD WIDGET
+// ══════════════════════════════════════════════════════════════════════════════
 class _ModernInfoCard extends StatelessWidget {
   final String label;
   final String value;

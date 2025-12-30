@@ -441,6 +441,97 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
+  Widget _buildEmailInfoBar(ThemeProvider theme, CartProvider cart) {
+    final hasEmail = cart.customerHasEmail;
+    final receivesEmail = cart.customerReceivesEmail;
+    final email = cart.selectedCustomer?['email'] ?? '';
+    final settings = cart.customerEmailSettings;
+
+    if (!hasEmail) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: receivesEmail
+            ? theme.success.withOpacity(0.1)
+            : theme.textSecondary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: receivesEmail
+              ? theme.success.withOpacity(0.3)
+              : theme.textSecondary.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            receivesEmail ? Icons.email : Icons.email_outlined,
+            size: 20,
+            color: receivesEmail ? theme.success : theme.textSecondary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  receivesEmail
+                      ? 'Kunde erhält Lieferschein'
+                      : 'Email-Versand deaktiviert',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: receivesEmail ? theme.success : theme.textSecondary,
+                  ),
+                ),
+                if (receivesEmail) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    email,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.textSecondary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Anhänge-Badges
+          if (receivesEmail) ...[
+            if (settings['sendPdf'] == true)
+              _buildAttachmentBadge(theme, 'PDF', theme.primary),
+            const SizedBox(width: 6),
+            if (settings['sendJson'] == true)
+              _buildAttachmentBadge(theme, 'JSON', theme.info),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentBadge(ThemeProvider theme, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   PreferredSizeWidget _buildAppBar(ThemeProvider theme, CartProvider cart) {
     return AppBar(
       backgroundColor: theme.surface,
@@ -527,6 +618,10 @@ class _CartScreenState extends State<CartScreen> {
             children: [
               _buildSummarySection(theme, cart, isDesktop: true),
               Divider(color: theme.divider),
+              // NEU: Email-Info-Leiste
+              if (cart.showEmailInfo)
+                _buildEmailInfoBar(theme, cart),
+
               const Spacer(),
               _buildActionButtons(theme, cart),
             ],
@@ -547,7 +642,13 @@ class _CartScreenState extends State<CartScreen> {
         _buildSummarySection(theme, cart),
         Divider(color: theme.divider, height: 1),
         Expanded(child: _buildPackageList(theme, cart)),
+        // NEU: Email-Info-Leiste
+        if (cart.showEmailInfo)
+          _buildEmailInfoBar(theme, cart),
+
         _buildActionButtons(theme, cart),
+
+
       ],
     );
   }

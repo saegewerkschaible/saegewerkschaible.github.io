@@ -24,6 +24,10 @@ class Customer {
   final String? alias;
   final bool useAliasOnLabels;
 
+  final bool emailReceivesDeliveryNote;  // Erhält überhaupt Emails
+  final bool emailSendPdf;                // PDF als Anhang
+  final bool emailSendJson;
+
   // Google Places & Geocoding Daten
   final String? placeId;              // Google Place ID
   final double? latitude;
@@ -56,6 +60,10 @@ class Customer {
     this.notes,
     this.alias,
     this.useAliasOnLabels = false,
+    this.emailReceivesDeliveryNote = true,  // NEU
+    this.emailSendPdf = true,                // NEU
+    this.emailSendJson = false,
+
     this.placeId,
     this.latitude,
     this.longitude,
@@ -115,6 +123,9 @@ class Customer {
       notes: map['notes'],
       alias: map['alias'],
       useAliasOnLabels: map['useAliasOnLabels'] ?? false,
+      emailReceivesDeliveryNote: map['emailSettings']?['receivesDeliveryNote'] ?? true,
+      emailSendPdf: map['emailSettings']?['sendPdf'] ?? true,
+      emailSendJson: map['emailSettings']?['sendJson'] ?? false,
       placeId: map['placeId'],
       latitude: map['latitude']?.toDouble(),
       longitude: map['longitude']?.toDouble(),
@@ -157,6 +168,11 @@ class Customer {
       'notes': notes,
       'alias': alias,
       'useAliasOnLabels': useAliasOnLabels,
+      'emailSettings': {
+        'receivesDeliveryNote': emailReceivesDeliveryNote,
+        'sendPdf': emailSendPdf,
+        'sendJson': emailSendJson,
+      },
       'placeId': placeId,
       'latitude': latitude,
       'longitude': longitude,
@@ -186,6 +202,9 @@ class Customer {
     String? notes,
     String? alias,
     bool? useAliasOnLabels,
+    bool? emailReceivesDeliveryNote,
+    bool? emailSendPdf,
+    bool? emailSendJson,
     String? placeId,
     double? latitude,
     double? longitude,
@@ -213,6 +232,10 @@ class Customer {
       notes: notes ?? this.notes,
       alias: alias ?? this.alias,
       useAliasOnLabels: useAliasOnLabels ?? this.useAliasOnLabels,
+      emailReceivesDeliveryNote: emailReceivesDeliveryNote ?? this.emailReceivesDeliveryNote,
+      emailSendPdf: emailSendPdf ?? this.emailSendPdf,
+      emailSendJson: emailSendJson ?? this.emailSendJson,
+
       placeId: placeId ?? this.placeId,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -226,6 +249,22 @@ class Customer {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  /// Hat der Kunde eine Email und ist für Lieferschein-Emails aktiviert?
+  bool get canReceiveDeliveryNoteEmail =>
+      email != null && email!.isNotEmpty && emailReceivesDeliveryNote;
+
+  /// Beschreibung der Email-Einstellungen für UI
+  String get emailSettingsDescription {
+    if (!canReceiveDeliveryNoteEmail) return 'Deaktiviert';
+
+    final parts = <String>[];
+    if (emailSendPdf) parts.add('PDF');
+    if (emailSendJson) parts.add('JSON');
+
+    if (parts.isEmpty) return 'Keine Anhänge';
+    return parts.join(' + ');
   }
 
   // ===== Hilfsmethoden =====

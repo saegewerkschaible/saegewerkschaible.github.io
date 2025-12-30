@@ -5,12 +5,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../services/icon_helper.dart';
 import '../models/layout_type.dart';
 import '../delivery_note_detail_screen.dart';
-import 'info_chips.dart';
 
 class DeliveryNoteCard extends StatelessWidget {
   final Map<String, dynamic> noteData;
@@ -34,6 +32,9 @@ class DeliveryNoteCard extends StatelessWidget {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// MOBILE CARD (Kompakt)
+// ══════════════════════════════════════════════════════════════════════════════
 class _MobileDeliveryNoteCard extends StatelessWidget {
   final Map<String, dynamic> noteData;
   final bool isEven;
@@ -43,42 +44,10 @@ class _MobileDeliveryNoteCard extends StatelessWidget {
     required this.isEven,
   });
 
-  Future<void> _downloadPdf(BuildContext context, String pdfUrl) async {
-    final colors = Provider.of<ThemeProvider>(context, listen: false).colors;
-
-    if (pdfUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Keine PDF-URL verfügbar'),
-          backgroundColor: colors.error,
-        ),
-      );
-      return;
-    }
-
-    try {
-      final Uri url = Uri.parse(pdfUrl);
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Download gestartet'),
-          backgroundColor: colors.success,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler beim Download: $e'),
-          backgroundColor: colors.error,
-        ),
-      );
-    }
-  }
   @override
   Widget build(BuildContext context) {
     final colors = Provider.of<ThemeProvider>(context).colors;
-    final DateFormat formatter = DateFormat('dd.MM.yyyy');
-    final DateFormat timeFormatter = DateFormat('HH:mm');
+    final DateFormat formatter = DateFormat('dd.MM.yy');
 
     final DateTime? createdAt =
     (noteData['createdAt'] as Timestamp?)?.toDate();
@@ -87,15 +56,16 @@ class _MobileDeliveryNoteCard extends StatelessWidget {
     final double totalVolume =
         (noteData['totalVolume'] as num?)?.toDouble() ?? 0.0;
     final int totalQuantity = noteData['totalQuantity'] as int? ?? 0;
-    final String pdfUrl = noteData['pdfUrl'] ?? '';
+    final int packageCount =
+        (noteData['items'] as List<dynamic>?)?.length ?? 0;
 
     final backgroundColor = isEven ? colors.surface : colors.background;
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 0),
       color: backgroundColor,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: colors.border, width: 1),
       ),
       elevation: 0,
@@ -110,170 +80,87 @@ class _MobileDeliveryNoteCard extends StatelessWidget {
             ),
           );
         },
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
             children: [
-              // Header: Nummer + Datum
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          colors.primary.withOpacity(0.15),
-                          colors.primary.withOpacity(0.05),
-                        ],
+              // Nummer Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: colors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  number,
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Kunde + Infos
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      customerName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: colors.textPrimary,
                       ),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: colors.primary.withOpacity(0.3),
-                        width: 1,
-                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                    const SizedBox(height: 2),
+                    Row(
                       children: [
-                        getAdaptiveIcon(
-                          iconName: 'receipt',
-                          defaultIcon: Icons.receipt,
-                          size: 14,
-                          color: colors.primary,
+                        _buildMiniChip(
+                          colors,
+                          '$packageCount Pkt',
+                          Icons.inventory_2,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          number,
-                          style: TextStyle(
-                            color: colors.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                          ),
+                        _buildMiniChip(
+                          colors,
+                          '$totalQuantity Stk',
+                          Icons.format_list_numbered,
+                        ),
+                        const SizedBox(width: 6),
+                        _buildMiniChip(
+                          colors,
+                          '${totalVolume.toStringAsFixed(1)} m³',
+                          Icons.view_in_ar,
                         ),
                       ],
                     ),
-                  ),
-                  if (createdAt != null)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          formatter.format(createdAt),
-                          style: TextStyle(
-                            color: colors.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        Text(
-                          timeFormatter.format(createdAt),
-                          style: TextStyle(
-                            color: colors.textHint,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
+                  ],
+                ),
               ),
 
-              const SizedBox(height: 8),
-              Divider(color: colors.border, height: 1),
-              const SizedBox(height: 8),
-
-              // Kunde mit Download-Button
-              Row(
+              // Datum
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: colors.background,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: getAdaptiveIcon(
-                      iconName: 'person',
-                      defaultIcon: Icons.person,
-                      size: 20,
+                  Text(
+                    createdAt != null ? formatter.format(createdAt) : '',
+                    style: TextStyle(
                       color: colors.textSecondary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Kunde',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          customerName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: colors.textPrimary,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: getAdaptiveIcon(
-                      iconName: 'download',
-                      defaultIcon: Icons.download,
-                      color: colors.primary,
-                      size: 22,
-                    ),
-                    onPressed: () => _downloadPdf(context, pdfUrl),
-                    tooltip: 'PDF herunterladen',
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              // Volumen, Anzahl & Pakete
-              Row(
-                children: [
-                  Expanded(
-                    child: MobileInfoTile(
-                      icon: Icons.inventory_2,
-                      iconName: 'inventory_2',
-                      label: 'Pakete',
-                      value:
-                      '${(noteData['items'] as List<dynamic>?)?.length ?? 0}',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: MobileInfoTile(
-                      icon: Icons.format_list_numbered,
-                      iconName: 'format_list_numbered',
-                      label: 'Stk.',
-                      value: '$totalQuantity',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: MobileInfoTile(
-                      icon: Icons.view_in_ar,
-                      iconName: 'view_in_ar',
-                      label: 'Vol.',
-                      value: '${totalVolume.toStringAsFixed(1)} m³',
-                    ),
+                  const SizedBox(height: 2),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: colors.textSecondary,
                   ),
                 ],
               ),
@@ -283,8 +170,28 @@ class _MobileDeliveryNoteCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildMiniChip(dynamic colors, String text, IconData icon) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 10, color: colors.textSecondary),
+        const SizedBox(width: 2),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 10,
+            color: colors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// DESKTOP/TABLET CARD (Kompakt)
+// ══════════════════════════════════════════════════════════════════════════════
 class _DesktopDeliveryNoteCard extends StatelessWidget {
   final Map<String, dynamic> noteData;
   final LayoutType layoutType;
@@ -293,42 +200,6 @@ class _DesktopDeliveryNoteCard extends StatelessWidget {
     required this.noteData,
     required this.layoutType,
   });
-
-  Future<void> _downloadPdf(BuildContext context, String pdfUrl) async {
-    final colors = Provider.of<ThemeProvider>(context, listen: false).colors;
-
-    if (pdfUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Keine PDF-URL verfügbar'),
-          backgroundColor: colors.error,
-        ),
-      );
-      return;
-    }
-
-    try {
-      final Uri url = Uri.parse(pdfUrl);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Download gestartet'),
-            backgroundColor: colors.success,
-          ),
-        );
-      } else {
-        throw 'URL kann nicht geöffnet werden';
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Fehler beim Download: $e'),
-          backgroundColor: colors.error,
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -342,38 +213,17 @@ class _DesktopDeliveryNoteCard extends StatelessWidget {
     final double totalVolume =
         (noteData['totalVolume'] as num?)?.toDouble() ?? 0.0;
     final int totalQuantity = noteData['totalQuantity'] as int? ?? 0;
-    final String pdfUrl = noteData['pdfUrl'] ?? '';
-
-    double borderRadius;
-    double padding;
-    double titleFontSize;
-
-    switch (layoutType) {
-      case LayoutType.mobile:
-        borderRadius = 12;
-        padding = 16;
-        titleFontSize = 16;
-        break;
-      case LayoutType.tablet:
-        borderRadius = 14;
-        padding = 18;
-        titleFontSize = 18;
-        break;
-      case LayoutType.desktop:
-        borderRadius = 16;
-        padding = 20;
-        titleFontSize = 18;
-        break;
-    }
+    final int packageCount =
+        (noteData['items'] as List<dynamic>?)?.length ?? 0;
 
     return Card(
       margin: EdgeInsets.zero,
       color: colors.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(12),
         side: BorderSide(color: colors.border),
       ),
-      elevation: 2,
+      elevation: 1,
       child: InkWell(
         onTap: () {
           Navigator.push(
@@ -385,92 +235,109 @@ class _DesktopDeliveryNoteCard extends StatelessWidget {
             ),
           );
         },
-        borderRadius: BorderRadius.circular(borderRadius),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: EdgeInsets.all(padding),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Header: Nummer + Datum
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
-                      vertical: 4,
+                      vertical: 3,
                     ),
                     decoration: BoxDecoration(
                       color: colors.primaryLight,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       'Nr. $number',
                       style: TextStyle(
                         color: colors.primary,
                         fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
                   ),
-                  const Spacer(),
                   Text(
                     createdAt != null ? formatter.format(createdAt) : '',
                     style: TextStyle(
                       color: colors.textSecondary,
-                      fontSize: 14,
+                      fontSize: 12,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+
+              // Kunde
               Row(
                 children: [
                   getAdaptiveIcon(
                     iconName: 'person',
                     defaultIcon: Icons.person,
-                    size: 16,
+                    size: 14,
                     color: colors.textSecondary,
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       customerName,
                       style: TextStyle(
-                        fontSize: titleFontSize,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: colors.textPrimary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+
+              // Stats
               Row(
                 children: [
-                  DeliveryInfoChip(
-                    icon: Icons.view_in_ar,
-                    iconName: 'view_in_ar',
-                    label: '${totalVolume.toStringAsFixed(2)} m³',
-                  ),
-                  const SizedBox(width: 8),
-                  DeliveryInfoChip(
-                    icon: Icons.format_list_numbered,
-                    iconName: 'format_list_numbered',
-                    label: '$totalQuantity Stk',
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: getAdaptiveIcon(
-                      iconName: 'download',
-                      defaultIcon: Icons.download,
-                      color: colors.textSecondary,
-                    ),
-                    onPressed: () => _downloadPdf(context, pdfUrl),
-                    tooltip: 'Herunterladen',
-                  ),
+                  _buildStatChip(colors, '$packageCount Pkt', Icons.inventory_2),
+                  const SizedBox(width: 6),
+                  _buildStatChip(colors, '$totalQuantity Stk', Icons.format_list_numbered),
+                  const SizedBox(width: 6),
+                  _buildStatChip(colors, '${totalVolume.toStringAsFixed(1)} m³', Icons.view_in_ar),
                 ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatChip(dynamic colors, String text, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.background,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: colors.textSecondary),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              color: colors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

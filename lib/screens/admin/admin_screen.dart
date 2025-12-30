@@ -5,12 +5,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:saegewerk/customer_management/customer_management_screen.dart';
 
 import '../../core/theme/theme_provider.dart';
 
 class AdminScreen extends StatefulWidget {
-  const AdminScreen({super.key});
+  final int initialTab;
+
+  const AdminScreen({super.key, this.initialTab = 0});
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
@@ -23,7 +24,11 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTab,
+    );
   }
 
   @override
@@ -46,7 +51,7 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Verwaltung',
+          'Paketeigenschaften',
           style: TextStyle(
             color: theme.textPrimary,
             fontWeight: FontWeight.bold,
@@ -57,12 +62,10 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
           labelColor: theme.primary,
           unselectedLabelColor: theme.textSecondary,
           indicatorColor: theme.primary,
-          isScrollable: true,
           tabs: const [
             Tab(icon: Icon(Icons.forest), text: 'Holzarten'),
             Tab(icon: Icon(Icons.warehouse), text: 'Lagerorte'),
             Tab(icon: Icon(Icons.straighten), text: 'Maße'),
-            Tab(icon: Icon(Icons.people), text: 'Kunden'),
           ],
         ),
       ),
@@ -84,7 +87,6 @@ class _AdminScreenState extends State<AdminScreen> with SingleTickerProviderStat
             emptyText: 'Keine Lagerorte vorhanden',
           ),
           _DimensionsSettingsTab(theme: theme),
-          CustomerManagementScreen(userGroup: 10),
         ],
       ),
     );

@@ -88,6 +88,11 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
   late final TextEditingController longitudeController;
   bool _isLoading = false;
   bool _useAliasOnLabels = false;
+  bool _emailReceivesDeliveryNote = true;
+  bool _emailSendPdf = true;
+  bool _emailSendJson = false;
+
+
 
   // Google Places Daten
   String? _selectedPlaceId;
@@ -103,6 +108,10 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
 
     if (widget.customer != null) {
       final customer = widget.customer!;
+      _emailReceivesDeliveryNote = widget.customer!.emailReceivesDeliveryNote;
+      _emailSendPdf = widget.customer!.emailSendPdf;
+      _emailSendJson = widget.customer!.emailSendJson;
+
       nameController = TextEditingController(text: customer.name);
       streetController = TextEditingController(text: customer.street ?? '');
       houseNumberController = TextEditingController(text: customer.houseNumber ?? '');
@@ -164,6 +173,123 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
     longitudeController.dispose();
     super.dispose();
   }
+
+
+  Widget _buildEmailSettingsSection(ThemeProvider theme) {
+    // Nur anzeigen wenn Email-Feld nicht leer
+    if (emailController.text.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Icon(Icons.email, size: 20, color: theme.primary),
+            const SizedBox(width: 8),
+            Text(
+              'Lieferschein-Email',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: theme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Hauptschalter
+        _buildCheckboxTile(
+          theme: theme,
+          title: 'Kunde erhält Lieferscheine per Email',
+          subtitle: 'An: ${emailController.text}',
+          value: _emailReceivesDeliveryNote,
+          onChanged: (v) => setState(() => _emailReceivesDeliveryNote = v ?? true),
+          activeColor: theme.success,
+        ),
+
+        // Unteroptionen (nur wenn aktiviert)
+        if (_emailReceivesDeliveryNote) ...[
+          Padding(
+            padding: const EdgeInsets.only(left: 32),
+            child: Column(
+              children: [
+                _buildCheckboxTile(
+                  theme: theme,
+                  title: 'PDF-Anhang',
+                  subtitle: 'Lieferschein als PDF',
+                  value: _emailSendPdf,
+                  onChanged: (v) => setState(() => _emailSendPdf = v ?? true),
+                ),
+                _buildCheckboxTile(
+                  theme: theme,
+                  title: 'JSON-Export',
+                  subtitle: 'Für automatischen Datenimport',
+                  value: _emailSendJson,
+                  onChanged: (v) => setState(() => _emailSendJson = v ?? false),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCheckboxTile({
+    required ThemeProvider theme,
+    required String title,
+    String? subtitle,
+    required bool value,
+    required ValueChanged<bool?> onChanged,
+    Color? activeColor,
+  }) {
+    return InkWell(
+      onTap: () => onChanged(!value),
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Checkbox(
+              value: value,
+              onChanged: onChanged,
+              activeColor: activeColor ?? theme.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: theme.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.textSecondary,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
 
   Future<void> _saveCustomer() async {
     // Theme Colors abrufen (listen: false, da wir hier nicht neu bauen)
@@ -231,6 +357,9 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
           notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
           alias: aliasController.text.trim().isEmpty ? null : aliasController.text.trim(),
           useAliasOnLabels: _useAliasOnLabels,
+          emailReceivesDeliveryNote: _emailReceivesDeliveryNote,
+          emailSendPdf: _emailSendPdf,
+          emailSendJson: _emailSendJson,
           placeId: _selectedPlaceId,
           latitude: finalLat,
           longitude: finalLng,
@@ -293,6 +422,9 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
           notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
           alias: aliasController.text.trim().isEmpty ? null : aliasController.text.trim(),
           useAliasOnLabels: _useAliasOnLabels,
+          emailReceivesDeliveryNote: _emailReceivesDeliveryNote,  // ← NEU
+          emailSendPdf: _emailSendPdf,                            // ← NEU
+          emailSendJson: _emailSendJson,
           placeId: _selectedPlaceId,
           latitude: finalLat,
           longitude: finalLng,
@@ -688,7 +820,7 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
                               ),
                             ),
                           ),
-
+                          _buildEmailSettingsSection(theme),
                           const SizedBox(height: 16),
 
                           _buildTextField(
