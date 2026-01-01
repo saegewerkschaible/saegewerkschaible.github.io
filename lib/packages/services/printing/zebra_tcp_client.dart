@@ -8,53 +8,50 @@ import 'dart:typed_data';
 class ZebraPrinterSettings {
   final double darkness;
   final double printSpeed;
+  final int printWidth;
   final int tearOff;
   final String mediaType;
-  final int printWidth;
 
   const ZebraPrinterSettings({
     this.darkness = 15.0,
     this.printSpeed = 4.0,
+    this.printWidth = 1200,
     this.tearOff = 0,
     this.mediaType = 'MARK',
-    this.printWidth = 1200,
   });
 
+  /// 300 DPI: 12 dots = 1mm
   double get printWidthMm => printWidth / 12.0;
 
   ZebraPrinterSettings copyWith({
     double? darkness,
     double? printSpeed,
+    int? printWidth,
     int? tearOff,
     String? mediaType,
-    int? printWidth,
-  }) {
-    return ZebraPrinterSettings(
-      darkness: darkness ?? this.darkness,
-      printSpeed: printSpeed ?? this.printSpeed,
-      tearOff: tearOff ?? this.tearOff,
-      mediaType: mediaType ?? this.mediaType,
-      printWidth: printWidth ?? this.printWidth,
-    );
-  }
+  }) => ZebraPrinterSettings(
+    darkness: darkness ?? this.darkness,
+    printSpeed: printSpeed ?? this.printSpeed,
+    printWidth: printWidth ?? this.printWidth,
+    tearOff: tearOff ?? this.tearOff,
+    mediaType: mediaType ?? this.mediaType,
+  );
 
   Map<String, dynamic> toMap() => {
     'darkness': darkness,
     'printSpeed': printSpeed,
+    'printWidth': printWidth,
     'tearOff': tearOff,
     'mediaType': mediaType,
-    'printWidth': printWidth,
   };
 
-  factory ZebraPrinterSettings.fromMap(Map<String, dynamic> map) {
-    return ZebraPrinterSettings(
-      darkness: (map['darkness'] ?? 15.0).toDouble(),
-      printSpeed: (map['printSpeed'] ?? 4.0).toDouble(),
-      tearOff: map['tearOff'] ?? 0,
-      mediaType: map['mediaType'] ?? 'MARK',
-      printWidth: map['printWidth'] ?? 1200,
-    );
-  }
+  factory ZebraPrinterSettings.fromMap(Map<String, dynamic> map) => ZebraPrinterSettings(
+    darkness: (map['darkness'] ?? 15.0).toDouble(),
+    printSpeed: (map['printSpeed'] ?? 4.0).toDouble(),
+    printWidth: map['printWidth'] ?? 1200,
+    tearOff: map['tearOff'] ?? 0,
+    mediaType: map['mediaType'] ?? 'MARK',
+  );
 
   @override
   String toString() => 'ZebraPrinterSettings(darkness: $darkness, speed: $printSpeed, width: ${printWidthMm.toStringAsFixed(1)}mm)';
@@ -129,7 +126,6 @@ class ZebraTcpClient {
     try {
       final cleaned = response.replaceAll('\x02', '').replaceAll('\x03', '').trim();
       final parts = cleaned.split(',');
-
       return PrinterStatus(
         isOnline: true,
         isPaused: parts.length > 1 && parts[1].trim() == '1',
@@ -142,13 +138,8 @@ class ZebraTcpClient {
 
   // ==================== DRUCKEN ====================
 
-  /// Sendet ZPL-Code zum Drucker
-  Future<bool> printZpl(String zpl) async {
-    return await _send(zpl);
-  }
-
-  /// Sendet PDF-Bytes
-  Future<bool> printPdf(Uint8List bytes) async {
+  /// Sendet Bytes an Drucker
+  Future<bool> _send(Uint8List bytes) async {
     Socket? socket;
     try {
       socket = await Socket.connect(ipAddress, port, timeout: timeout);
@@ -156,11 +147,37 @@ class ZebraTcpClient {
       await socket.flush();
       return true;
     } catch (e) {
-      print('ZebraTCP: PDF-Druck fehlgeschlagen: $e');
+      print('ZebraTCP: Senden fehlgeschlagen: $e');
       return false;
     } finally {
       socket?.destroy();
     }
+  }
+
+  /// Sendet String an Drucker
+  Future<bool> _sendString(String data) async {
+    return await _send(Uint8List.fromList(utf8.encode(data)));
+  }
+
+  /// Sendet ZPL-Code zum Drucker
+  Future<bool> printZpl(String zpl) async {
+    return await _sendString(zpl);
+  }
+
+  /// Sendet PDF-Datei zum Drucker
+  Future<bool> printPdf(File pdfFile) async {
+    try {
+      final bytes = await pdfFile.readAsBytes();
+      return await _send(bytes);
+    } catch (e) {
+      print('ZebraTCP: PDF-Druck fehlgeschlagen: $e');
+      return false;
+    }
+  }
+
+  /// Sendet beliebige Datei zum Drucker
+  Future<bool> printFile(File file) async {
+    return await printPdf(file);
   }
 
   /// Test-Label drucken
@@ -170,6 +187,7 @@ class ZebraTcpClient {
 ^FO50,50^ADN,36,20^FDZebra Test^FS
 ^FO50,100^ADN,20,12^FD$ipAddress:$port^FS
 ^FO50,150^BY2^BCN,60,Y,N,N^FDTEST123^FS
+^FO50,230^ADN,18,10^FD${DateTime.now().toString().substring(0, 16)}^FS
 ^XZ
 ''';
     return await printZpl(zpl);
@@ -177,7 +195,7 @@ class ZebraTcpClient {
 
   // ==================== EINSTELLUNGEN ====================
 
-  /// Liest Drucker-Einstellungen
+  /// Liest Drucker-Einstellungen direkt vom Gerät
   Future<ZebraPrinterSettings?> readSettings() async {
     try {
       final darkness = await _getVar('print.tone');
@@ -187,8 +205,8 @@ class ZebraTcpClient {
       final tear = await _getVar('ezpl.tear_off');
 
       return ZebraPrinterSettings(
-        darkness: (double.tryParse(darkness ?? '15') ?? 15).clamp(0, 30),
-        printSpeed: (double.tryParse(speed ?? '4') ?? 4).clamp(2, 6),
+        darkness: (double.tryParse(darkness ?? '15') ?? 15).clamp(0, 30).toDouble(),
+        printSpeed: (double.tryParse(speed ?? '4') ?? 4).clamp(2, 6).toDouble(),
         printWidth: (int.tryParse(width ?? '1200') ?? 1200).clamp(200, 1280),
         mediaType: media ?? 'MARK',
         tearOff: int.tryParse(tear ?? '0') ?? 0,
@@ -199,7 +217,7 @@ class ZebraTcpClient {
     }
   }
 
-  /// Speichert Einstellungen
+  /// Speichert Einstellungen auf dem Drucker
   Future<bool> saveSettings(ZebraPrinterSettings settings) async {
     try {
       await _setVar('print.tone', settings.darkness.round().toString());
@@ -208,7 +226,7 @@ class ZebraTcpClient {
       await _setVar('ezpl.tear_off', settings.tearOff.toString());
 
       // Permanent speichern
-      await _send('^XA^JUS^XZ');
+      await _sendString('^XA^JUS^XZ');
       return true;
     } catch (e) {
       print('ZebraTCP: Einstellungen speichern fehlgeschlagen: $e');
@@ -223,32 +241,17 @@ class ZebraTcpClient {
   }
 
   Future<void> _setVar(String name, String value) async {
-    await _send('! U1 setvar "$name" "$value"\r\n');
+    await _sendString('! U1 setvar "$name" "$value"\r\n');
   }
 
-  // ==================== KALIBRIERUNG ====================
+  // ==================== WARTUNG ====================
 
-  Future<bool> calibrate() => _send('~JC');
-  Future<bool> printConfigLabel() => _send('~WC');
-  Future<bool> reset() => _send('~JR');
-  Future<bool> cancelJob() => _send('~JA');
+  Future<bool> calibrate() => _sendString('~JC');
+  Future<bool> printConfigLabel() => _sendString('~WC');
+  Future<bool> reset() => _sendString('~JR');
+  Future<bool> cancelJob() => _sendString('~JA');
 
   // ==================== HILFSMETHODEN ====================
-
-  Future<bool> _send(String data) async {
-    Socket? socket;
-    try {
-      socket = await Socket.connect(ipAddress, port, timeout: timeout);
-      socket.write(data);
-      await socket.flush();
-      return true;
-    } catch (e) {
-      print('ZebraTCP: Senden fehlgeschlagen: $e');
-      return false;
-    } finally {
-      socket?.destroy();
-    }
-  }
 
   Future<String?> _sendWithResponse(String data) async {
     Socket? socket;

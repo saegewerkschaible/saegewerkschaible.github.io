@@ -74,7 +74,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   bool _pinHolzart = false;
   bool _pinKunde = false;
   bool _pinLagerort = false;
-
+  bool _pinStaerke = false;
+  bool _pinBreite = false;
+  bool _pinLaenge = false;
   DocumentReference get _pinSettingsRef => FirebaseFirestore.instance
       .collection('settings')
       .doc('package_pins');
@@ -105,6 +107,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
           _pinHolzart = data['holzart'] ?? false;
           _pinKunde = data['kunde'] ?? false;
           _pinLagerort = data['lagerort'] ?? false;
+          // NEU
+          _pinStaerke = data['staerke'] ?? false;
+          _pinBreite = data['breite'] ?? false;
+          _pinLaenge = data['laenge'] ?? false;
 
           // Gepinnte Werte laden
           if (_pinHolzart && data['holzartValue'] != null) {
@@ -116,13 +122,25 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
           if (_pinLagerort && data['lagerortValue'] != null) {
             lagerortController.text = data['lagerortValue'];
           }
+          // NEU
+          if (_pinStaerke && data['staerkeValue'] != null) {
+            hController.text = data['staerkeValue'];
+          }
+          if (_pinBreite && data['breiteValue'] != null) {
+            bController.text = data['breiteValue'];
+          }
+          if (_pinLaenge && data['laengeValue'] != null) {
+            lController.text = data['laengeValue'];
+          }
         });
+
+        // Volumen neu berechnen wenn Werte geladen wurden
+        _recalculateVolume();
       }
     } catch (e) {
       debugPrint('Fehler beim Laden der Pin-Einstellungen: $e');
     }
   }
-
   // NEU: Pin-Einstellung speichern
   Future<void> _togglePin(String field) async {
     setState(() {
@@ -136,6 +154,16 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         case 'lagerort':
           _pinLagerort = !_pinLagerort;
           break;
+      // NEU
+        case 'staerke':
+          _pinStaerke = !_pinStaerke;
+          break;
+        case 'breite':
+          _pinBreite = !_pinBreite;
+          break;
+        case 'laenge':
+          _pinLaenge = !_pinLaenge;
+          break;
       }
     });
 
@@ -144,20 +172,50 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         'holzart': _pinHolzart,
         'kunde': _pinKunde,
         'lagerort': _pinLagerort,
+        // NEU
+        'staerke': _pinStaerke,
+        'breite': _pinBreite,
+        'laenge': _pinLaenge,
+        // Werte
         'holzartValue': _pinHolzart ? holzartController.text : null,
         'kundeValue': _pinKunde ? kundeController.text : null,
         'lagerortValue': _pinLagerort ? lagerortController.text : null,
+        // NEU
+        'staerkeValue': _pinStaerke ? hController.text : null,
+        'breiteValue': _pinBreite ? bController.text : null,
+        'laengeValue': _pinLaenge ? lController.text : null,
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Fehler beim Speichern der Pin-Einstellungen: $e');
     }
   }
-
   // NEU: Gepinnte Werte aktualisieren wenn sich Feld ändert
   Future<void> _updatePinnedValue(String field, String value) async {
-    if ((field == 'holzart' && _pinHolzart) ||
-        (field == 'kunde' && _pinKunde) ||
-        (field == 'lagerort' && _pinLagerort)) {
+    bool shouldUpdate = false;
+
+    switch (field) {
+      case 'holzart':
+        shouldUpdate = _pinHolzart;
+        break;
+      case 'kunde':
+        shouldUpdate = _pinKunde;
+        break;
+      case 'lagerort':
+        shouldUpdate = _pinLagerort;
+        break;
+    // NEU
+      case 'staerke':
+        shouldUpdate = _pinStaerke;
+        break;
+      case 'breite':
+        shouldUpdate = _pinBreite;
+        break;
+      case 'laenge':
+        shouldUpdate = _pinLaenge;
+        break;
+    }
+
+    if (shouldUpdate) {
       try {
         await _pinSettingsRef.set({
           '${field}Value': value,
@@ -168,33 +226,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
     }
   }
   Future<void> _handlePrint() async {
-    final saved = await _saveChanges();
-    if (!saved) return;
-
-    try {
-      final barcode = widget.isNewPackage
-          ? (int.tryParse(barcodeController.text)! - 1).toString()
-          : barcodeController.text;
-
-      final packageData = await _buildPrintData(barcode);
-      final result = await _printerService.printPackageLabel(context, packageData);
-
-      if (!mounted) return;
-      showAppSnackbar(context, result.message);
-
-      // Bei eingebettetem Modus: nicht schließen, nur Felder leeren
-      if (result.success && !widget.isEmbedded && widget.userGroup != 2) {
-        if (mounted) Navigator.pop(context);
-      }
-    } catch (e) {
-      showAppSnackbar(context, 'Fehler beim Drucken: $e');
-    }
-  }
-
-  Future<Map<String, dynamic>> _buildPrintData(String barcode) async {
-    return {
-      'Barcode': barcode,
-      'Nr': barcode,
+    // 1. ALLE Daten JETZT speichern, bevor irgendetwas geändert wird
+    final printData = {
+      'Barcode': barcodeController.text,
+      'Nr': barcodeController.text,
       'Kunde': kundeController.text,
       'Auftragsnr': auftragsnrController.text,
       'Holzart': holzartController.text,
@@ -206,16 +241,28 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       'Bemerkung': bemerkungController.text,
       'Nr_ext': nrExtController.text,
     };
+
+    // 2. Speichern
+    final saved = await _saveChanges();
+    if (!saved) return;
+
+    // 3. Mounted check
+    if (!mounted) return;
+
+    try {
+      // Die vorher gespeicherten Daten verwenden!
+      final result = await _printerService.printPackageLabel(context, printData);
+
+      if (!mounted) return;
+      showAppSnackbar(context, result.message);
+
+    } catch (e) {
+      if (mounted) {
+        showAppSnackbar(context, 'Fehler beim Drucken: $e');
+      }
+    }
   }
 
-  Future<String> _getInitials(String name) async {
-    if (name.isEmpty) return '';
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-    }
-    return name.substring(0, min(2, name.length)).toUpperCase();
-  }
 
   void _initControllers() {
     final data = widget.packageData;
@@ -242,9 +289,11 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
 
   Future<void> _loadNextBarcode() async {
     final nextNumber = await _packageService.getNextPackageNumber();
-    setState(() {
-      barcodeController.text = nextNumber.toString();
-    });
+    if (mounted) {
+      setState(() {
+        barcodeController.text = nextNumber.toString();
+      });
+    }
   }
 
   @override
@@ -352,6 +401,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
 
   // ANPASSEN: _clearFieldsForNextPackage
   void _clearFieldsForNextPackage() {
+    if (!mounted) return;
     setState(() {
       nrExtController.clear();
       auftragsnrController.clear();
@@ -363,9 +413,12 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       if (!_pinHolzart) holzartController.clear();
       if (!_pinKunde) kundeController.clear();
       if (!_pinLagerort) lagerortController.clear();
+      // NEU
+      if (!_pinStaerke) hController.clear();
+      if (!_pinBreite) bController.clear();
+      if (!_pinLaenge) lController.clear();
     });
   }
-
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
@@ -401,11 +454,11 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         Expanded(
           flex: 1,
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(8),
             child: Column(
               children: [
                 // Paket-Nummer Header (nur bei eingebettetem Modus)
-                if (widget.isEmbedded) _buildPackageHeader(theme),
+                // if (widget.isEmbedded) _buildPackageHeader(theme),
 
                 // Allgemeine Informationen
                 ExpandableSection(
@@ -432,7 +485,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                     onPinnedValueChanged: _updatePinnedValue,  // NEU
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
 
                 // Maße & Menge
                 ExpandableSection(
@@ -471,6 +524,12 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                         onValidationError: (msg) => showAppSnackbar(context, msg),
                       );
                     },
+                    pinStaerke: _pinStaerke,
+                    pinBreite: _pinBreite,
+                    pinLaenge: _pinLaenge,
+                    onTogglePin: _togglePin,
+                    onPinnedValueChanged: _updatePinnedValue,
+
                   ),
                 ),
               ],
@@ -559,7 +618,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
 
   Widget _buildMobileLayout(ThemeProvider theme) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       child: Column(
         children: [
           // Paket-Nummer Header (nur bei eingebettetem Modus)
@@ -629,6 +688,14 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                   onValidationError: (msg) => showAppSnackbar(context, msg),
                 );
               },
+              pinStaerke: _pinStaerke,
+              pinBreite: _pinBreite,
+              pinLaenge: _pinLaenge,
+              onTogglePin: _togglePin,
+              onPinnedValueChanged: _updatePinnedValue,
+
+
+
             ),
           ),
           const SizedBox(height: 8),

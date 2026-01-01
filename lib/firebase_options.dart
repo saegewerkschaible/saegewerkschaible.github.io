@@ -70,6 +70,6 @@ class DefaultFirebaseOptions {
     messagingSenderId: '406446535404',
     projectId: 'schaibleapp',
     storageBucket: 'schaibleapp.firebasestorage.app',
-    iosBundleId: 'com.schaible.saegewerke.schaible',
+    iosBundleId: 'com.schaible.saegewerk',
   );
 }

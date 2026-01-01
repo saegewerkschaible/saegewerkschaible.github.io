@@ -2,9 +2,14 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:saegewerk/packages/services/zebra_pdf_generator.dart';
+import 'package:saegewerk/packages/services/zebra_settings_cache.dart';
 
 import 'zebra_tcp_client.dart';
-import 'zebra_label_generator.dart';
+
+
+// Re-export für andere Dateien
+export 'zebra_tcp_client.dart' show ZebraPrinterSettings;
 
 /// Zebra Drucker Model
 class ZebraPrinter {
@@ -55,11 +60,7 @@ class PrintResult {
   final String message;
   final String? error;
 
-  const PrintResult({
-    required this.success,
-    required this.message,
-    this.error,
-  });
+  const PrintResult({required this.success, required this.message, this.error});
 
   factory PrintResult.success([String message = 'Erfolgreich gedruckt']) =>
       PrintResult(success: true, message: message);
@@ -77,29 +78,22 @@ class ZebraPrinterService {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  // Firestore Pfade
-  CollectionReference get _printersCollection =>
-      _db.collection('zebra_printers');
-
-  DocumentReference get _userDoc =>
-      _db.collection('users').doc(_auth.currentUser!.uid);
+  CollectionReference get _printersCollection => _db.collection('zebra_printers');
+  DocumentReference get _userDoc => _db.collection('users').doc(_auth.currentUser!.uid);
 
   // ==================== DRUCKER VERWALTUNG ====================
 
-  /// Stream aller Zebra-Drucker
   Stream<List<ZebraPrinter>> watchPrinters() {
     return _printersCollection.orderBy('nickname').snapshots().map(
           (snap) => snap.docs.map((doc) => ZebraPrinter.fromFirestore(doc)).toList(),
     );
   }
 
-  /// Alle Drucker laden
   Future<List<ZebraPrinter>> getPrinters() async {
     final snap = await _printersCollection.orderBy('nickname').get();
     return snap.docs.map((doc) => ZebraPrinter.fromFirestore(doc)).toList();
   }
 
-  /// Drucker hinzufügen
   Future<String> addPrinter({
     required String nickname,
     required String ipAddress,
@@ -117,31 +111,26 @@ class ZebraPrinterService {
     return doc.id;
   }
 
-  /// Drucker aktualisieren
   Future<void> updatePrinter(String id, Map<String, dynamic> data) async {
     await _printersCollection.doc(id).update(data);
   }
 
-  /// Drucker löschen
   Future<void> deletePrinter(String id) async {
     await _printersCollection.doc(id).delete();
   }
 
   // ==================== STANDARD-DRUCKER ====================
 
-  /// Standard-Drucker IP laden
   Future<String?> getDefaultPrinterIp() async {
     final doc = await _userDoc.get();
     final data = doc.data() as Map<String, dynamic>?;
     return data?['defaultZebraPrinter'] as String?;
   }
 
-  /// Standard-Drucker setzen
   Future<void> setDefaultPrinter(String ipAddress) async {
     await _userDoc.set({'defaultZebraPrinter': ipAddress}, SetOptions(merge: true));
   }
 
-  /// Standard-Drucker als Objekt laden
   Future<ZebraPrinter?> getDefaultPrinter() async {
     final ip = await getDefaultPrinterIp();
     if (ip == null) return null;
@@ -153,56 +142,54 @@ class ZebraPrinterService {
 
   // ==================== DRUCKEN ====================
 
-  /// Paket-Etikett drucken
+  /// Paket-Etikett drucken (PDF)
   Future<PrintResult> printPackageLabel(
       BuildContext context,
       Map<String, dynamic> packageData,
       ) async {
     try {
+      debugPrint('=== PRINT PACKAGE LABEL ===');
+
+      // 1. Drucker auswählen
+      debugPrint('Selecting printer...');
       final printer = await _selectPrinter(context);
       if (printer == null) {
+        debugPrint('No printer selected');
         return PrintResult.failure('Kein Drucker ausgewählt');
       }
+      debugPrint('Printer: ${printer.nickname} (${printer.ipAddress})');
 
-      // ZPL generieren
-      final produkt = packageData['Produkt']?.toString() ?? '';
-      final zpl = produkt == 'Lamelle'
-          ? ZebraLabelGenerator.generateLamellenLabel(packageData)
-          : ZebraLabelGenerator.generatePackageLabel(packageData);
+      // 2. Label-Breite aus Firebase-Cache laden
+      debugPrint('Loading label width...');
+      final labelWidthMm = await ZebraSettingsCache.getLabelWidthMm(
+        printer.id,
+        defaultWidth: 100.0,
+      );
+      debugPrint('Label width: $labelWidthMm mm');
 
-      // Drucken
-      final success = await printer.client.printZpl(zpl);
+      // 3. PDF generieren
+      debugPrint('Generating PDF...');
+      debugPrint('Package data: $packageData');
+      final pdfFile = await ZebraPdfGenerator.generatePackageLabel(
+        packageData,
+        labelWidthMm,
+      );
+      debugPrint('PDF created: ${pdfFile.path}');
+
+      // 4. An Drucker senden
+      debugPrint('Sending to printer...');
+      final success = await printer.client.printPdf(pdfFile);
+      debugPrint('Send result: $success');
 
       if (success) {
         return PrintResult.success('Etikett gedruckt auf ${printer.nickname}');
       } else {
         return PrintResult.failure('Drucker ${printer.nickname} nicht erreichbar');
       }
-    } catch (e) {
-      return PrintResult.failure(e.toString());
-    }
-  }
-
-
-  /// Einfaches Barcode-Label drucken
-  Future<PrintResult> printBarcodeLabel(
-      BuildContext context,
-      String barcode, {
-        String? title,
-      }) async {
-    try {
-      final printer = await _selectPrinter(context);
-      if (printer == null) {
-        return PrintResult.failure('Kein Drucker ausgewählt');
-      }
-
-      final zpl = ZebraLabelGenerator.generateBarcodeLabel(barcode, title: title);
-      final success = await printer.client.printZpl(zpl);
-
-      return success
-          ? PrintResult.success('Barcode gedruckt')
-          : PrintResult.failure('Druckfehler');
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('=== PRINT ERROR ===');
+      debugPrint('Error: $e');
+      debugPrint('Stack: $stack');
       return PrintResult.failure(e.toString());
     }
   }
@@ -217,23 +204,53 @@ class ZebraPrinterService {
 
   // ==================== DRUCKER AUSWAHL ====================
 
-  /// Wählt Drucker aus (Standard oder Dialog)
   Future<ZebraPrinter?> _selectPrinter(BuildContext context) async {
-    // Erst Standard-Drucker versuchen
+    debugPrint('_selectPrinter: START');
+
+    // Context-Check VOR dem async Call
+    if (!context.mounted) {
+      debugPrint('_selectPrinter: Context not mounted at start');
+      return null;
+    }
+
     final defaultPrinter = await getDefaultPrinter();
+    debugPrint('_selectPrinter: defaultPrinter = ${defaultPrinter?.nickname ?? "NULL"}');
 
     if (defaultPrinter != null) {
-      // Prüfen ob online
       final isOnline = await defaultPrinter.client.isOnline();
+      debugPrint('_selectPrinter: isOnline = $isOnline');
       if (isOnline) return defaultPrinter;
     }
 
-    // Sonst Dialog zeigen
-    if (!context.mounted) return null;
-    return await showPrinterSelectionDialog(context);
-  }
+    // Kein Default oder offline - Dialog zeigen
+    if (!context.mounted) {
+      debugPrint('_selectPrinter: Context not mounted before dialog');
+      return null;
+    }
 
-  /// Dialog zur Drucker-Auswahl
+    // Printers direkt laden und Dialog sofort zeigen (ohne weiteren async Call dazwischen)
+    final printers = await getPrinters();
+
+    if (printers.isEmpty) {
+      debugPrint('_selectPrinter: No printers configured');
+      return null;
+    }
+
+    if (printers.length == 1) {
+      debugPrint('_selectPrinter: Only one printer, using it');
+      return printers.first;
+    }
+
+    if (!context.mounted) {
+      debugPrint('_selectPrinter: Context not mounted before dialog');
+      return null;
+    }
+
+    return showDialog<ZebraPrinter>(
+      context: context,
+      builder: (ctx) => _PrinterSelectionDialog(printers: printers),
+    );
+  }
   Future<ZebraPrinter?> showPrinterSelectionDialog(BuildContext context) async {
     final printers = await getPrinters();
 
@@ -246,9 +263,7 @@ class ZebraPrinterService {
       return null;
     }
 
-    if (printers.length == 1) {
-      return printers.first;
-    }
+    if (printers.length == 1) return printers.first;
 
     if (!context.mounted) return null;
 
@@ -258,21 +273,49 @@ class ZebraPrinterService {
     );
   }
 
-  // ==================== STATUS & EINSTELLUNGEN ====================
+  // ==================== EINSTELLUNGEN ====================
 
-  /// Drucker-Status prüfen
-  Future<PrinterStatus> checkStatus(ZebraPrinter printer) {
-    return printer.client.getStatus();
+  /// Einstellungen vom Drucker lesen
+  Future<ZebraPrinterSettings?> readSettings(ZebraPrinter printer) async {
+    // Erst aus Cache versuchen
+    final cached = await ZebraSettingsCache.getSettingsRaw(printer.id);
+    if (cached != null) {
+      return ZebraPrinterSettings(
+        darkness: cached['darkness'] as double,
+        printSpeed: cached['printSpeed'] as double,
+        printWidth: cached['printWidth'] as int,
+        tearOff: cached['tearOff'] as int,
+        mediaType: cached['mediaType'] as String,
+      );
+    }
+
+    // Sonst vom Drucker laden
+    return await printer.client.readSettings();
   }
 
-  /// Einstellungen lesen
-  Future<ZebraPrinterSettings?> readSettings(ZebraPrinter printer) {
-    return printer.client.readSettings();
-  }
+  /// Einstellungen speichern (Firebase + Drucker)
+  Future<bool> saveSettings(ZebraPrinter printer, ZebraPrinterSettings settings) async {
+    try {
+      // 1. In Firebase speichern
+      await ZebraSettingsCache.saveSettingsRaw(printer.id, {
+        'darkness': settings.darkness,
+        'printSpeed': settings.printSpeed,
+        'printWidth': settings.printWidth,
+        'tearOff': settings.tearOff,
+        'mediaType': settings.mediaType,
+      });
 
-  /// Einstellungen speichern
-  Future<bool> saveSettings(ZebraPrinter printer, ZebraPrinterSettings settings) {
-    return printer.client.saveSettings(settings);
+      // 2. An Drucker senden (wenn online)
+      final isOnline = await printer.client.isOnline();
+      if (isOnline) {
+        await printer.client.saveSettings(settings);
+      }
+
+      return true;
+    } catch (e) {
+      print('Fehler beim Speichern: $e');
+      return false;
+    }
   }
 
   /// Kalibrierung starten

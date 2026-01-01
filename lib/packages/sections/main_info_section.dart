@@ -94,7 +94,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // Externe Nr + Datum
         Row(
@@ -118,7 +118,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
             ),
           ],
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 12),
 
         // Holzart MIT PIN
         StreamBuilder<QuerySnapshot>(
@@ -143,7 +143,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
             );
           },
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
 
         // Kunde MIT PIN
         StreamBuilder<QuerySnapshot>(
@@ -207,7 +207,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
               Text(' *', style: TextStyle(color: theme.error, fontSize: 12)),
           ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
 
         // Select Field mit Pin-Button in der Zeile
         Row(
@@ -228,7 +228,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                 ),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isPinned
                         ? theme.primary.withOpacity(0.05)

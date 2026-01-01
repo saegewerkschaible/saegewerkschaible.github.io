@@ -525,6 +525,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
     ];
   }
 
+  // Füge diese Helper-Methode zur Klasse hinzu:
+  double _getButtonSize(double screenWidth) {
+    if (screenWidth < 400) return 130;      // Kleine Phones
+    if (screenWidth < 600) return 150;      // Normale Phones
+    if (screenWidth < 900) return 140;      // Tablets
+    return 150;                              // Desktop
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
@@ -602,35 +610,52 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Grid Buttons - responsive
-                // Grid Buttons - responsive
+                // Grid Buttons - RESPONSIVE
                 Expanded(
-                  child: kIsWeb
-                  // WEB: Zentrierte Cards mit fixer Größe
-                      ? Center(
-                    child: Wrap(
-                      spacing: 16,
-                      runSpacing: 16,
-                      alignment: WrapAlignment.center,
-                      children: [
-                        _buildMenuButton(theme: theme, icon: Icons.keyboard, label: 'Manuell', onTap: _showBarcodeInputDialog, fixedSize: 160),
-                        _buildMenuButton(theme: theme, icon: Icons.history, label: 'Zuletzt', subtitle: lastScannedBarcode ?? '–', enabled: lastScannedBarcode != null, onTap: lastScannedBarcode != null ? () => _fetchPackageData(lastScannedBarcode!) : null, fixedSize: 160),
-                        _buildMenuButton(theme: theme, icon: Icons.add_box, label: 'Neu', onTap: _showNewPackageSheet, fixedSize: 160),
-                      ],
+                  child: Center(
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 16,
+                        runSpacing: 16,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          // Scanner nur auf Mobile
+                          if (!kIsWeb)
+                            _buildMenuButton(
+                              theme: theme,
+                              icon: Icons.qr_code_scanner,
+                              label: 'Scannen',
+                              onTap: _scanBarcode,
+                              fixedSize: _getButtonSize(screenWidth),
+                            ),
+                          _buildMenuButton(
+                            theme: theme,
+                            icon: Icons.keyboard,
+                            label: 'Manuell',
+                            onTap: _showBarcodeInputDialog,
+                            fixedSize: _getButtonSize(screenWidth),
+                          ),
+                          _buildMenuButton(
+                            theme: theme,
+                            icon: Icons.history,
+                            label: 'Zuletzt',
+                            subtitle: lastScannedBarcode ?? '–',
+                            enabled: lastScannedBarcode != null,
+                            onTap: lastScannedBarcode != null
+                                ? () => _fetchPackageData(lastScannedBarcode!)
+                                : null,
+                            fixedSize: _getButtonSize(screenWidth),
+                          ),
+                          _buildMenuButton(
+                            theme: theme,
+                            icon: Icons.add_box,
+                            label: 'Neu',
+                            onTap: _showNewPackageSheet,
+                            fixedSize: _getButtonSize(screenWidth),
+                          ),
+                        ],
+                      ),
                     ),
-                  )
-                  // MOBILE: Grid wie bisher
-                      : GridView.count(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 1.0,
-                    children: [
-                      _buildMenuButton(theme: theme, icon: Icons.qr_code_scanner, label: 'Scannen', onTap: _scanBarcode),
-                      _buildMenuButton(theme: theme, icon: Icons.keyboard, label: 'Manuell', onTap: _showBarcodeInputDialog),
-                      _buildMenuButton(theme: theme, icon: Icons.history, label: 'Zuletzt', subtitle: lastScannedBarcode ?? '–', enabled: lastScannedBarcode != null, onTap: lastScannedBarcode != null ? () => _fetchPackageData(lastScannedBarcode!) : null),
-                      _buildMenuButton(theme: theme, icon: Icons.add_box, label: 'Neu', onTap: _showNewPackageSheet),
-                    ],
                   ),
                 ),
               ],
@@ -640,7 +665,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
       ),
     );
   }
-
   Widget _buildMenuButton({
     required ThemeProvider theme,
     required IconData icon,

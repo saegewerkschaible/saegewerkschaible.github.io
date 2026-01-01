@@ -1,8 +1,9 @@
-// lib/widgets/printer/zebra_printer_settings_sheet.dart
+// lib/screens/settings/zebra_printer_settings_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:saegewerk/packages/services/printing/zebra_printer_service.dart';
 import 'package:saegewerk/packages/services/printing/zebra_tcp_client.dart';
+import 'package:saegewerk/packages/services/zebra_settings_cache.dart';
 
 import '../../core/theme/theme_provider.dart';
 
@@ -20,7 +21,9 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _loadingFromPrinter = false;
   bool _isOnline = false;
+  bool _loadedFromCache = false;
   ZebraPrinterSettings? _settings;
 
   @override
@@ -32,21 +35,93 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
   Future<void> _loadSettings() async {
     setState(() => _loading = true);
 
-    final isOnline = await widget.printer.client.isOnline();
-    ZebraPrinterSettings? settings;
+    try {
+      // 1. Erst aus Firebase-Cache laden
+      final cached = await ZebraSettingsCache.getSettingsRaw(widget.printer.id);
+      final isOnline = await widget.printer.client.isOnline();
 
-    if (isOnline) {
-      settings = await _service.readSettings(widget.printer);
-    }
+      if (cached != null) {
+        // Cache gefunden - in ZebraPrinterSettings konvertieren
+        setState(() {
+          _settings = ZebraPrinterSettings(
+            darkness: cached['darkness'] as double,
+            printSpeed: cached['printSpeed'] as double,
+            printWidth: cached['printWidth'] as int,
+            tearOff: cached['tearOff'] as int,
+            mediaType: cached['mediaType'] as String,
+          );
+          _isOnline = isOnline;
+          _loadedFromCache = true;
+          _loading = false;
+        });
+        return;
+      }
 
-    // Fallback auf Defaults
-    settings ??= const ZebraPrinterSettings();
-
-    if (mounted) {
+      // 2. Kein Cache -> vom Drucker laden falls online
+      if (isOnline) {
+        await _loadFromPrinter();
+      } else {
+        setState(() {
+          _settings = const ZebraPrinterSettings();
+          _isOnline = false;
+          _loadedFromCache = false;
+          _loading = false;
+        });
+      }
+    } catch (e) {
       setState(() {
-        _isOnline = isOnline;
-        _settings = settings;
+        _settings = const ZebraPrinterSettings();
+        _isOnline = false;
+        _loadedFromCache = false;
         _loading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFromPrinter() async {
+    setState(() => _loadingFromPrinter = true);
+
+    try {
+      final isReady = await widget.printer.client.isOnline();
+
+      if (isReady) {
+        final settings = await widget.printer.client.readSettings();
+        if (settings != null) {
+          // In Firebase cachen
+          await ZebraSettingsCache.saveSettingsRaw(widget.printer.id, {
+            'darkness': settings.darkness,
+            'printSpeed': settings.printSpeed,
+            'printWidth': settings.printWidth,
+            'tearOff': settings.tearOff,
+            'mediaType': settings.mediaType,
+          });
+
+          setState(() {
+            _settings = settings;
+            _isOnline = true;
+            _loadedFromCache = false;
+            _loading = false;
+            _loadingFromPrinter = false;
+          });
+
+          _showSnackbar('Einstellungen vom Drucker geladen', Colors.green);
+          return;
+        }
+      }
+
+      setState(() {
+        _settings ??= const ZebraPrinterSettings();
+        _isOnline = false;
+        _loading = false;
+        _loadingFromPrinter = false;
+      });
+
+      _showSnackbar('Drucker nicht erreichbar', Colors.orange);
+    } catch (e) {
+      setState(() {
+        _isOnline = false;
+        _loading = false;
+        _loadingFromPrinter = false;
       });
     }
   }
@@ -56,21 +131,41 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
 
     setState(() => _saving = true);
 
-    final success = await _service.saveSettings(widget.printer, _settings!);
+    try {
+      // 1. In Firebase speichern
+      await ZebraSettingsCache.saveSettingsRaw(widget.printer.id, {
+        'darkness': _settings!.darkness,
+        'printSpeed': _settings!.printSpeed,
+        'printWidth': _settings!.printWidth,
+        'tearOff': _settings!.tearOff,
+        'mediaType': _settings!.mediaType,
+      });
 
-    if (mounted) {
-      setState(() => _saving = false);
+      // 2. An Drucker senden (wenn online)
+      bool printerSuccess = true;
+      if (_isOnline) {
+        printerSuccess = await widget.printer.client.saveSettings(_settings!);
+      }
 
       final theme = context.read<ThemeProvider>();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'Einstellungen gespeichert' : 'Fehler beim Speichern'),
-          backgroundColor: success ? theme.primary : theme.error,
-        ),
-      );
-
-      if (success) Navigator.pop(context);
+      if (printerSuccess) {
+        _showSnackbar('Einstellungen gespeichert', theme.primary);
+        if (mounted) Navigator.pop(context);
+      } else {
+        _showSnackbar('Lokal gespeichert, Drucker-Fehler', Colors.orange);
+      }
+    } catch (e) {
+      _showSnackbar('Fehler: $e', Colors.red);
+    } finally {
+      setState(() => _saving = false);
     }
+  }
+
+  void _showSnackbar(String message, Color color) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
   }
 
   @override
@@ -124,36 +219,46 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Einstellungen',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      widget.printer.nickname,
-                      style: TextStyle(fontSize: 14, color: theme.textSecondary),
-                    ),
+                    Text('Einstellungen', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.textPrimary)),
+                    Text(widget.printer.nickname, style: TextStyle(fontSize: 14, color: theme.textSecondary)),
                   ],
                 ),
               ),
-              IconButton(
-                icon: Icon(Icons.close, color: theme.textSecondary),
-                onPressed: () => Navigator.pop(context),
-              ),
+              IconButton(icon: Icon(Icons.close, color: theme.textSecondary), onPressed: () => Navigator.pop(context)),
             ],
           ),
           const SizedBox(height: 12),
-          _buildStatusBadge(theme),
+          Row(
+            children: [
+              Expanded(child: _buildStatusBadge(theme)),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 36,
+                child: OutlinedButton.icon(
+                  onPressed: _loadingFromPrinter ? null : _loadFromPrinter,
+                  icon: _loadingFromPrinter
+                      ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: theme.primary))
+                      : Icon(Icons.sync, size: 14, color: theme.primary),
+                  label: const Text('Vom Drucker', style: TextStyle(fontSize: 11)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: theme.primary,
+                    side: BorderSide(color: theme.primary),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildStatusBadge(ThemeProvider theme) {
-    final color = _isOnline ? Colors.green : theme.error;
+    final color = _isOnline ? Colors.green : Colors.orange;
+    final text = _loadedFromCache
+        ? (_isOnline ? 'Gespeicherte Einstellungen' : 'Offline - Gespeichert')
+        : (_isOnline ? 'Vom Drucker geladen' : 'Offline - Standard');
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -165,16 +270,9 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            _isOnline ? Icons.check_circle : Icons.error_outline,
-            size: 16,
-            color: color,
-          ),
+          Icon(_isOnline ? Icons.check_circle : Icons.warning, size: 16, color: color),
           const SizedBox(width: 8),
-          Text(
-            _isOnline ? 'Online - Einstellungen geladen' : 'Offline - Standard-Einstellungen',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
-          ),
+          Expanded(child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color))),
         ],
       ),
     );
@@ -200,7 +298,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
         children: [
           Icon(Icons.error_outline, size: 64, color: theme.error.withOpacity(0.5)),
           const SizedBox(height: 16),
-          Text('Drucker nicht erreichbar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textPrimary)),
+          Text('Fehler beim Laden', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.textPrimary)),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: _loadSettings,
@@ -219,7 +317,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Druckbreite
+          // Label-Breite
           _buildSection(
             theme: theme,
             title: 'Label-Breite',
@@ -248,18 +346,12 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
                         max: 1280,
                         divisions: 104,
                         activeColor: theme.primary,
-                        onChanged: (v) => setState(() {
-                          _settings = _settings!.copyWith(printWidth: v.round());
-                        }),
+                        onChanged: (v) => setState(() => _settings = _settings!.copyWith(printWidth: v.round())),
                       ),
                     ),
                     SizedBox(
                       width: 60,
-                      child: Text(
-                        '${_settings!.printWidthMm.toStringAsFixed(0)}mm',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: theme.textPrimary),
-                        textAlign: TextAlign.right,
-                      ),
+                      child: Text('${_settings!.printWidthMm.toStringAsFixed(0)}mm', style: TextStyle(fontWeight: FontWeight.bold, color: theme.textPrimary), textAlign: TextAlign.right),
                     ),
                   ],
                 ),
@@ -291,10 +383,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Bereich: 0-30 (höher = dunkler)',
-                  style: TextStyle(fontSize: 12, color: theme.textSecondary, fontStyle: FontStyle.italic),
-                ),
+                Text('Bereich: 0-30 (höher = dunkler)', style: TextStyle(fontSize: 12, color: theme.textSecondary, fontStyle: FontStyle.italic)),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -305,18 +394,12 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
                         max: 30,
                         divisions: 30,
                         activeColor: theme.primary,
-                        onChanged: (v) => setState(() {
-                          _settings = _settings!.copyWith(darkness: v);
-                        }),
+                        onChanged: (v) => setState(() => _settings = _settings!.copyWith(darkness: v)),
                       ),
                     ),
                     SizedBox(
                       width: 50,
-                      child: Text(
-                        '${_settings!.darkness.round()}',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: theme.textPrimary),
-                        textAlign: TextAlign.right,
-                      ),
+                      child: Text('${_settings!.darkness.round()}', style: TextStyle(fontWeight: FontWeight.bold, color: theme.textPrimary), textAlign: TextAlign.right),
                     ),
                   ],
                 ),
@@ -339,7 +422,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Zebra ${widget.printer.model} - 300 DPI\nÄnderungen werden permanent gespeichert.',
+                    'Zebra ${widget.printer.model} - 300 DPI\nEinstellungen werden in Firebase gespeichert.',
                     style: TextStyle(fontSize: 12, color: theme.primary),
                   ),
                 ),
@@ -351,31 +434,20 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
     );
   }
 
-  Widget _buildSection({
-    required ThemeProvider theme,
-    required String title,
-    required IconData icon,
-    required Widget child,
-  }) {
+  Widget _buildSection({required ThemeProvider theme, required String title, required IconData icon, required Widget child}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: theme.primary),
-            const SizedBox(width: 8),
-            Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: theme.textPrimary)),
-          ],
-        ),
+        Row(children: [
+          Icon(icon, size: 20, color: theme.primary),
+          const SizedBox(width: 8),
+          Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: theme.textPrimary)),
+        ]),
         const SizedBox(height: 12),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.background,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: theme.border),
-          ),
+          decoration: BoxDecoration(color: theme.background, borderRadius: BorderRadius.circular(10), border: Border.all(color: theme.border)),
           child: child,
         ),
       ],
@@ -413,25 +485,11 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
             Container(
               width: 20,
               height: 20,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: isSelected ? theme.primary : theme.textSecondary, width: 2),
-              ),
-              child: isSelected
-                  ? Center(child: Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: theme.primary)))
-                  : null,
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: isSelected ? theme.primary : theme.textSecondary, width: 2)),
+              child: isSelected ? Center(child: Container(width: 10, height: 10, decoration: BoxDecoration(shape: BoxShape.circle, color: theme.primary))) : null,
             ),
             const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? theme.primary : theme.textPrimary,
-                ),
-              ),
-            ),
+            Expanded(child: Text(label, style: TextStyle(fontSize: 13, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? theme.primary : theme.textPrimary))),
           ],
         ),
       ),
@@ -441,63 +499,27 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
   Widget _buildFooter(ThemeProvider theme) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.surface,
-        boxShadow: [BoxShadow(color: theme.divider, spreadRadius: 1, blurRadius: 3, offset: const Offset(0, -1))],
-      ),
+      decoration: BoxDecoration(color: theme.surface, boxShadow: [BoxShadow(color: theme.divider, spreadRadius: 1, blurRadius: 3, offset: const Offset(0, -1))]),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Quick Actions
           Row(
             children: [
-              Expanded(
-                child: _buildQuickAction(
-                  theme: theme,
-                  icon: Icons.print,
-                  label: 'Test',
-                  onTap: () async {
-                    final result = await _service.printTestLabel(widget.printer);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(result.message), backgroundColor: result.success ? theme.primary : theme.error),
-                      );
-                    }
-                  },
-                ),
-              ),
+              Expanded(child: _buildQuickAction(theme: theme, icon: Icons.print, label: 'Test', onTap: () async {
+                final result = await _service.printTestLabel(widget.printer);
+                _showSnackbar(result.message, result.success ? theme.primary : Colors.red);
+              })),
               const SizedBox(width: 8),
-              Expanded(
-                child: _buildQuickAction(
-                  theme: theme,
-                  icon: Icons.tune,
-                  label: 'Kalibrieren',
-                  onTap: () async {
-                    final success = await _service.calibrate(widget.printer);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(success ? 'Kalibrierung gestartet' : 'Fehler'), backgroundColor: success ? theme.primary : theme.error),
-                      );
-                    }
-                  },
-                ),
-              ),
+              Expanded(child: _buildQuickAction(theme: theme, icon: Icons.tune, label: 'Kalibrieren', onTap: () async {
+                final success = await _service.calibrate(widget.printer);
+                _showSnackbar(success ? 'Kalibrierung gestartet' : 'Fehler', success ? theme.primary : Colors.red);
+              })),
               const SizedBox(width: 8),
-              Expanded(
-                child: _buildQuickAction(
-                  theme: theme,
-                  icon: Icons.info_outline,
-                  label: 'Config',
-                  onTap: () async {
-                    final success = await _service.printConfigLabel(widget.printer);
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(success ? 'Config-Label gedruckt' : 'Fehler'), backgroundColor: success ? theme.primary : theme.error),
-                      );
-                    }
-                  },
-                ),
-              ),
+              Expanded(child: _buildQuickAction(theme: theme, icon: Icons.info_outline, label: 'Config', onTap: () async {
+                final success = await _service.printConfigLabel(widget.printer);
+                _showSnackbar(success ? 'Config-Label gedruckt' : 'Fehler', success ? theme.primary : Colors.red);
+              })),
             ],
           ),
           const SizedBox(height: 12),
@@ -508,7 +530,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
             child: ElevatedButton.icon(
               onPressed: _saving ? null : _saveSettings,
               icon: _saving
-                  ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save),
               label: Text(_saving ? 'Speichere...' : 'Speichern'),
               style: ElevatedButton.styleFrom(
@@ -524,12 +546,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
     );
   }
 
-  Widget _buildQuickAction({
-    required ThemeProvider theme,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildQuickAction({required ThemeProvider theme, required IconData icon, required String label, required VoidCallback onTap}) {
     return OutlinedButton.icon(
       onPressed: _saving ? null : onTap,
       icon: Icon(icon, size: 18),
@@ -541,4 +558,5 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
-  }}
+  }
+}

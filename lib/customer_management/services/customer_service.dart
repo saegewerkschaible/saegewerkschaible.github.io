@@ -5,7 +5,6 @@ import 'package:saegewerk/customer_management/models/customer.dart';
 
 class CustomerService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String _companyId = '100'; // Deine Company ID
 
   CollectionReference get _customersCollection =>
       _firestore.collection('customers');
