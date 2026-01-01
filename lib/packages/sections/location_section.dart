@@ -70,6 +70,7 @@ class _LocationSectionState extends State<LocationSection> {
                   ),
                 ),
                 const Spacer(),
+                // Dezenter Pin-Button
                 _PinButton(
                   isPinned: widget.isPinned,
                   onToggle: widget.onTogglePin,
@@ -132,8 +133,7 @@ class _LocationSectionState extends State<LocationSection> {
                             fontWeight: isSelected
                                 ? FontWeight.w600
                                 : FontWeight.normal,
-                            color:
-                            isSelected ? Colors.white : theme.textPrimary,
+                            color: isSelected ? Colors.white : theme.textPrimary,
                           ),
                         ),
                       ],
@@ -149,7 +149,7 @@ class _LocationSectionState extends State<LocationSection> {
   }
 }
 
-// Pin-Button Widget
+// Dezenter Pin-Button - nur Icon
 class _PinButton extends StatelessWidget {
   final bool isPinned;
   final VoidCallback onToggle;
@@ -165,34 +165,12 @@ class _PinButton extends StatelessWidget {
 
     return GestureDetector(
       onTap: onToggle,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isPinned ? theme.primary : theme.background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isPinned ? theme.primary : theme.border,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              size: 14,
-              color: isPinned ? Colors.white : theme.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              isPinned ? 'Gepinnt' : 'Pinnen',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isPinned ? Colors.white : theme.textSecondary,
-              ),
-            ),
-          ],
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+          size: 20,
+          color: isPinned ? theme.primary : theme.textHint,
         ),
       ),
     );

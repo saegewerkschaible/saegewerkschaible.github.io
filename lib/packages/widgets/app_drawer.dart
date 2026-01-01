@@ -3,7 +3,9 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:saegewerk/customer_management/customer_management_screen.dart';
 import 'package:saegewerk/services/auth_service.dart';
 
@@ -12,11 +14,13 @@ import '../../constants.dart';
 import '../../screens/admin/admin_screen.dart';
 import '../../screens/admin/user_management_screen.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   final String userName;
   final int userGroup;
   final int currentIndex;
   final Function(int) onNavigate;
+  final bool showQuickAccess;
+  final Function(bool)? onQuickAccessChanged;
 
   const AppDrawer({
     super.key,
@@ -24,7 +28,31 @@ class AppDrawer extends StatelessWidget {
     required this.userGroup,
     required this.currentIndex,
     required this.onNavigate,
+    this.showQuickAccess = false,
+    this.onQuickAccessChanged,
   });
+
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
+  String _appVersion = '...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _appVersion = '${info.version}';
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,58 +63,32 @@ class AppDrawer extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            // Header
             _buildHeader(theme),
-
             Divider(height: 1, color: theme.divider),
 
-            // Navigation Items
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 children: [
-                  // Haupt-Navigation - Nur für Büro (2) und Admin (3)
-                  if (userGroup >= 2) ...[
-                    _buildNavItem(
-                      theme: theme,
-                      icon: Icons.qr_code_scanner,
-                      label: 'Pakete',
-                      index: 0,
-                    ),
-                    _buildNavItem(
-                      theme: theme,
-                      icon: Icons.inventory_2,
-                      label: 'Lager',
-                      index: 1,
-                    ),
-                    _buildNavItem(
-                      theme: theme,
-                      icon: Icons.bar_chart,
-                      label: 'Statistik',
-                      index: 2,
-                    ),
-                    _buildNavItem(
-                      theme: theme,
-                      icon: Icons.receipt_long,
-                      label: 'Lieferscheine',
-                      index: 3,
-                    ),
-                    _buildNavItem(
-                      theme: theme,
-                      icon: Icons.shopping_cart,
-                      label: 'Warenkorb',
-                      index: 4,
-                    ),
+                  // Quick-Access Toggle (nur auf Web)
+                  if (kIsWeb && widget.userGroup >= 2)
+                    _buildQuickAccessToggle(context, theme),
+
+                  // Haupt-Navigation
+                  if (widget.userGroup >= 2) ...[
+                    _buildNavItem(theme: theme, icon: Icons.qr_code_scanner, label: 'Pakete', index: 0),
+                    _buildNavItem(theme: theme, icon: Icons.inventory_2, label: 'Lager', index: 1),
+                    _buildNavItem(theme: theme, icon: Icons.bar_chart, label: 'Statistik', index: 2),
+                    _buildNavItem(theme: theme, icon: Icons.receipt_long, label: 'Lieferscheine', index: 3),
+                    _buildNavItem(theme: theme, icon: Icons.shopping_cart, label: 'Warenkorb', index: 4),
                   ],
 
-                  // Admin-Bereich - Nur für Admin (3)
-                  if (userGroup >= 3) ...[
+                  // Admin-Bereich
+                  if (widget.userGroup >= 3) ...[
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: Divider(color: theme.divider),
                     ),
-
-                    // Section Header: Verwaltung
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       child: Text(
@@ -99,26 +101,21 @@ class AppDrawer extends StatelessWidget {
                         ),
                       ),
                     ),
-
-                    // Kundenverwaltung
-                    // Kundenverwaltung
                     _buildActionItem(
                       context: context,
                       theme: theme,
                       icon: Icons.people,
                       label: 'Kundenverwaltung',
                       onTap: () {
-                        Navigator.pop(context); // Drawer schließen
+                        Navigator.pop(context);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => _CustomerManagementWrapper(userGroup: userGroup),
+                            builder: (_) => _CustomerManagementWrapper(userGroup: widget.userGroup),
                           ),
                         );
                       },
                     ),
-
-                    // Benutzerverwaltung
                     _buildActionItem(
                       context: context,
                       theme: theme,
@@ -132,8 +129,6 @@ class AppDrawer extends StatelessWidget {
                         );
                       },
                     ),
-
-                    // Paketeigenschaften
                     _buildActionItemWithSubtitle(
                       context: context,
                       theme: theme,
@@ -169,17 +164,14 @@ class AppDrawer extends StatelessWidget {
                               const SizedBox(width: 8),
                               Text(
                                 'App Info',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.textPrimary,
-                                ),
+                                style: TextStyle(fontWeight: FontWeight.w600, color: theme.textPrimary),
                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
-                          _buildInfoRow(theme, 'Version', '1.0.0'),
-                          _buildInfoRow(theme, 'Benutzer', userName),
-                          _buildInfoRow(theme, 'Rolle', getUserGroupName(userGroup)),
+                          _buildInfoRow(theme, 'Version', _appVersion),
+                          _buildInfoRow(theme, 'Benutzer', widget.userName),
+                          _buildInfoRow(theme, 'Rolle', getUserGroupName(widget.userGroup)),
                         ],
                       ),
                     ),
@@ -204,10 +196,7 @@ class AppDrawer extends StatelessWidget {
                   const SizedBox(width: 12),
                   Text(
                     'Schaible Sägewerk',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: theme.textSecondary,
-                    ),
+                    style: TextStyle(fontSize: 14, color: theme.textSecondary),
                   ),
                 ],
               ),
@@ -218,65 +207,56 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  void _navigateToAdminTab(BuildContext context, int tabIndex) {
-    Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AdminScreen(initialTab: tabIndex),
-      ),
-    );
-  }
-  Widget _buildActionItemWithSubtitle({
-    required BuildContext context,
-    required ThemeProvider theme,
-    required IconData icon,
-    required String label,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
+  Widget _buildQuickAccessToggle(BuildContext context, ThemeProvider theme) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.primary.withOpacity(0.05),
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(icon, color: theme.textSecondary, size: 22),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 15,
-                          color: theme.textPrimary,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: theme.textSecondary,
-                        ),
-                      ),
-                    ],
+          border: Border.all(color: theme.primary.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.dock, color: theme.primary, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Quick-Access-Leiste',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: theme.textPrimary,
+                    ),
                   ),
-                ),
-                Icon(Icons.chevron_right, color: theme.textSecondary, size: 20),
-              ],
+                  Text(
+                    'Seitenleiste mit Icons',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            Switch(
+              value: widget.showQuickAccess,
+              onChanged: (value) {
+                widget.onQuickAccessChanged?.call(value);
+                Navigator.pop(context);
+              },
+              activeColor: theme.primary,
+            ),
+          ],
         ),
       ),
     );
   }
+
   Widget _buildHeader(ThemeProvider theme) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -297,7 +277,7 @@ class AppDrawer extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  userName,
+                  widget.userName,
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -313,7 +293,7 @@ class AppDrawer extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
-                    getUserGroupName(userGroup),
+                    getUserGroupName(widget.userGroup),
                     style: TextStyle(
                       fontSize: 12,
                       color: theme.primary,
@@ -335,14 +315,14 @@ class AppDrawer extends StatelessWidget {
     required String label,
     required int index,
   }) {
-    final isSelected = currentIndex == index;
+    final isSelected = widget.currentIndex == index;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => onNavigate(index),
+          onTap: () => widget.onNavigate(index),
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -353,11 +333,7 @@ class AppDrawer extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: isSelected ? theme.primary : theme.textSecondary,
-                  size: 22,
-                ),
+                Icon(icon, color: isSelected ? theme.primary : theme.textSecondary, size: 22),
                 const SizedBox(width: 16),
                 Text(
                   label,
@@ -372,10 +348,7 @@ class AppDrawer extends StatelessWidget {
                   Container(
                     width: 6,
                     height: 6,
-                    decoration: BoxDecoration(
-                      color: theme.primary,
-                      shape: BoxShape.circle,
-                    ),
+                    decoration: BoxDecoration(color: theme.primary, shape: BoxShape.circle),
                   ),
               ],
             ),
@@ -405,13 +378,7 @@ class AppDrawer extends StatelessWidget {
               children: [
                 Icon(icon, color: theme.textSecondary, size: 22),
                 const SizedBox(width: 16),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 15,
-                    color: theme.textPrimary,
-                  ),
-                ),
+                Text(label, style: TextStyle(fontSize: 15, color: theme.textPrimary)),
                 const Spacer(),
                 Icon(Icons.chevron_right, color: theme.textSecondary, size: 20),
               ],
@@ -422,62 +389,39 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildExpandableItem({
+  Widget _buildActionItemWithSubtitle({
     required BuildContext context,
     required ThemeProvider theme,
     required IconData icon,
     required String label,
-    required List<Widget> children,
+    required String subtitle,
+    required VoidCallback onTap,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          leading: Icon(icon, color: theme.textSecondary, size: 22),
-          title: Text(
-            label,
-            style: TextStyle(
-              fontSize: 15,
-              color: theme.textPrimary,
-            ),
-          ),
-          iconColor: theme.textSecondary,
-          collapsedIconColor: theme.textSecondary,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-          childrenPadding: EdgeInsets.zero,
-          children: children,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSubItem({
-    required BuildContext context,
-    required ThemeProvider theme,
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          margin: const EdgeInsets.only(left: 56),
-          child: Row(
-            children: [
-              Icon(icon, color: theme.textSecondary, size: 18),
-              const SizedBox(width: 12),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: theme.textSecondary,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Icon(icon, color: theme.textSecondary, size: 22),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: TextStyle(fontSize: 15, color: theme.textPrimary)),
+                      Text(subtitle, style: TextStyle(fontSize: 12, color: theme.textSecondary)),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                Icon(Icons.chevron_right, color: theme.textSecondary, size: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -490,23 +434,17 @@ class AppDrawer extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 13, color: theme.textSecondary),
-          ),
+          Text(label, style: TextStyle(fontSize: 13, color: theme.textSecondary)),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: theme.textPrimary,
-            ),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: theme.textPrimary),
           ),
         ],
       ),
     );
   }
 }
+
 class _CustomerManagementWrapper extends StatelessWidget {
   final int userGroup;
 
@@ -527,10 +465,7 @@ class _CustomerManagementWrapper extends StatelessWidget {
         ),
         title: Text(
           'Kundenverwaltung',
-          style: TextStyle(
-            color: theme.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: theme.textPrimary, fontWeight: FontWeight.bold),
         ),
       ),
       body: CustomerManagementScreen(userGroup: userGroup),

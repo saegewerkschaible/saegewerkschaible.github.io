@@ -12,12 +12,13 @@ import '../../core/theme/theme_provider.dart';
 ///
 /// [controller] - TextEditingController für den Eingabewert
 /// [onValueChanged] - Optionaler Callback wenn ein Wert übernommen wird
-void showCustomKeyboardDialog({
+Future<void> showCustomKeyboardDialog({
+
   required BuildContext context,
   required TextEditingController controller,
   VoidCallback? onValueChanged,
 }) {
-  showDialog(
+  return showDialog(
     context: context,
     builder: (BuildContext context) {
       return _CustomKeyboardDialog(

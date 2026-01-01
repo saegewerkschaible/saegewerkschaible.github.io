@@ -82,14 +82,7 @@ class CustomerColorPicker extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Wähle eine Farbe für diesen Kunden. Diese wird in der Kapazitätsplanung verwendet.',
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.textSecondary,
-            ),
-          ),
+
           const SizedBox(height: 16),
 
           // ExpansionTile für eingeklappte Farbauswahl

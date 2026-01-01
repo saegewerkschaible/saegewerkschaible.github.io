@@ -8,18 +8,18 @@ Widget getAdaptiveIcon({
   double size = 24,                // zurück auf 24
   Color? color,
 }) {
-  if (kIsWeb) {
-    return Image.asset(
-      '/icons/$iconName.png',   // korrekter Pfad
-      height: size,
-      width: size,
-      color: color,
-      fit: BoxFit.contain,           // besseres fitting
-      filterQuality: FilterQuality.high,  // bessere Qualität
-      errorBuilder: (context, error, stackTrace) {
-        return Icon(defaultIcon, size: size, color: color);
-      },
-    );
-  }
+  // if (kIsWeb) {
+  //   return Image.asset(
+  //     '/icons/$iconName.png',   // korrekter Pfad
+  //     height: size,
+  //     width: size,
+  //     color: color,
+  //     fit: BoxFit.contain,           // besseres fitting
+  //     filterQuality: FilterQuality.high,  // bessere Qualität
+  //     errorBuilder: (context, error, stackTrace) {
+  //       return Icon(defaultIcon, size: size, color: color);
+  //     },
+  //   );
+  // }
   return Icon(defaultIcon, size: size, color: color);
 }

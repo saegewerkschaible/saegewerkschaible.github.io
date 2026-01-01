@@ -83,10 +83,13 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                 controller: widget.auftragsnrController,
                 icon: Icons.assignment,
                 iconName: 'assignment',
-                onTap: () => showCustomKeyboardDialog(
-                  context: context,
-                  controller: widget.auftragsnrController,
-                ),
+                onTap: () async {
+                  await showCustomKeyboardDialog(
+                    context: context,
+                    controller: widget.auftragsnrController,
+                  );
+                  setState(() {});
+                },
               ),
             ),
           ],
@@ -187,7 +190,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Label-Zeile mit Pin-Button
+        // Label-Zeile
         Row(
           children: [
             Icon(icon, size: 16, color: theme.textSecondary),
@@ -202,73 +205,71 @@ class _MainInfoSectionState extends State<MainInfoSection> {
             ),
             if (isRequired)
               Text(' *', style: TextStyle(color: theme.error, fontSize: 12)),
-            const Spacer(),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Select Field mit Pin-Button in der Zeile
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => showSelectionBottomSheet(
+                  context: context,
+                  title: label,
+                  options: options,
+                  controller: controller,
+                  allowCustomInput: allowCustomInput,
+                  onSelect: (v) {
+                    controller.text = v;
+                    widget.onPinnedValueChanged(pinField, v);
+                    setState(() {});
+                  },
+                ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: isPinned
+                        ? theme.primary.withOpacity(0.05)
+                        : theme.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isInvalid
+                          ? theme.error
+                          : isPinned
+                          ? theme.primary
+                          : theme.border,
+                      width: isPinned ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          controller.text.isEmpty ? 'Auswählen...' : controller.text,
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: controller.text.isEmpty
+                                ? theme.textHint
+                                : theme.textPrimary,
+                            fontWeight: isPinned ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.arrow_drop_down, color: theme.textSecondary),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Dezenter Pin-Button
             _PinButton(
               isPinned: isPinned,
               onToggle: () => widget.onTogglePin(pinField),
             ),
           ],
-        ),
-        const SizedBox(height: 8),
-
-        // Select Field
-        GestureDetector(
-          onTap: () => showSelectionBottomSheet(
-            context: context,
-            title: label,
-            options: options,
-            controller: controller,
-            allowCustomInput: allowCustomInput,
-            onSelect: (v) {
-              controller.text = v;
-              widget.onPinnedValueChanged(pinField, v);
-              setState(() {});
-            },
-          ),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: isPinned
-                  ? theme.primary.withOpacity(0.05)
-                  : theme.background,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isInvalid
-                    ? theme.error
-                    : isPinned
-                    ? theme.primary
-                    : theme.border,
-                width: isPinned ? 2 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    controller.text.isEmpty ? 'Auswählen...' : controller.text,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: controller.text.isEmpty
-                          ? theme.textHint
-                          : theme.textPrimary,
-                      fontWeight: isPinned ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
-                ),
-                if (isPinned)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Icon(
-                      Icons.push_pin,
-                      size: 16,
-                      color: theme.primary,
-                    ),
-                  ),
-                Icon(Icons.arrow_drop_down, color: theme.textSecondary),
-              ],
-            ),
-          ),
         ),
       ],
     );
@@ -326,7 +327,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
   }
 }
 
-// Pin-Button Widget
+// Dezenter Pin-Button - nur Icon
 class _PinButton extends StatelessWidget {
   final bool isPinned;
   final VoidCallback onToggle;
@@ -342,34 +343,12 @@ class _PinButton extends StatelessWidget {
 
     return GestureDetector(
       onTap: onToggle,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isPinned ? theme.primary : theme.background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isPinned ? theme.primary : theme.border,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-              size: 14,
-              color: isPinned ? Colors.white : theme.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Text(
-              isPinned ? 'Gepinnt' : 'Pinnen',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isPinned ? Colors.white : theme.textSecondary,
-              ),
-            ),
-          ],
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          isPinned ? Icons.push_pin : Icons.push_pin_outlined,
+          size: 20,
+          color: isPinned ? theme.primary : theme.textHint,
         ),
       ),
     );
