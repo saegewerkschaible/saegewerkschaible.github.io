@@ -2,7 +2,7 @@ name: saegewerk
 description: "Schaible Sägewerk App"
 publish_to: 'none'
 
-version: 1.0.9+10
+version: 1.1.1+12
 
 environment:
   sdk: ^3.10.0-236.0.dev

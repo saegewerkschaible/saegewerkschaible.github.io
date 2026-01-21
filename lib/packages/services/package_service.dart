@@ -117,6 +117,8 @@ class PackageService {
       'laenge': data['laenge'] ?? 0,
       'stueckzahl': data['stueckzahl'] ?? 0,
       'menge': data['menge'] ?? 0.0,
+      'abzugStk': data['abzugStk'] ?? 0,
+      'abzugLaenge': data['abzugLaenge'] ?? 0.0,
       'zustand': data['zustand'] ?? PackageZustand.frisch,
       'lagerort': data['lagerort'] ?? '',
       'bemerkung': data['bemerkung'] ?? '',

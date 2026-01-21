@@ -16,10 +16,13 @@ class CartItem {
   final double breite;
   final double laenge;
   final int stueckzahl;
-  final double menge;
+  final double menge;         // Brutto-Volumen
   final String zustand;
   final String? kunde;
   final String? bemerkung;
+  // NEU: Abzug
+  final int abzugStk;
+  final double abzugLaenge;
 
   CartItem({
     required this.packageId,
@@ -34,7 +37,21 @@ class CartItem {
     required this.zustand,
     this.kunde,
     this.bemerkung,
+    this.abzugStk = 0,
+    this.abzugLaenge = 0,
   });
+
+  /// Berechnet das Abzug-Volumen
+  double get abzugVolumen {
+    if (abzugStk <= 0 || abzugLaenge <= 0) return 0;
+    return (hoehe * breite * abzugLaenge * abzugStk) / 1000000;
+  }
+
+  /// Netto-Volumen (Brutto - Abzug)
+  double get nettoVolumen => menge - abzugVolumen;
+
+  /// Hat dieser Artikel einen Abzug?
+  bool get hasAbzug => abzugStk > 0 && abzugLaenge > 0;
 
   /// Erstellt CartItem aus Firestore-Paketdaten
   factory CartItem.fromPackageData(Map<String, dynamic> data) {
@@ -52,6 +69,8 @@ class CartItem {
       zustand: data['zustand']?.toString() ?? '',
       kunde: data['kunde']?.toString(),
       bemerkung: data['bemerkung']?.toString(),
+      abzugStk: (data['abzugStk'] as num?)?.toInt() ?? 0,
+      abzugLaenge: (data['abzugLaenge'] as num?)?.toDouble() ?? 0,
     );
   }
 
@@ -70,6 +89,10 @@ class CartItem {
       'zustand': zustand,
       'kunde': kunde,
       'bemerkung': bemerkung,
+      'abzugStk': abzugStk,
+      'abzugLaenge': abzugLaenge,
+      'abzugVolumen': abzugVolumen,
+      'nettoVolumen': nettoVolumen,
     };
   }
 
@@ -138,9 +161,17 @@ class CartProvider extends ChangeNotifier {
   /// Zeige Email-Leiste?
   bool get showEmailInfo => customerHasEmail;
 
+  /// Brutto-Gesamtvolumen aller Pakete
+  double get totalVolumeBrutto => _items.fold(0.0, (sum, item) => sum + item.menge);
 
-  /// Gesamtvolumen aller Pakete
-  double get totalVolume => _items.fold(0.0, (sum, item) => sum + item.menge);
+  /// Gesamt-Abzug aller Pakete
+  double get totalAbzug => _items.fold(0.0, (sum, item) => sum + item.abzugVolumen);
+
+  /// Netto-Gesamtvolumen (Brutto - Abzug)
+  double get totalVolume => _items.fold(0.0, (sum, item) => sum + item.nettoVolumen);
+
+  /// Hat der Warenkorb Abzüge?
+  bool get hasAbzug => _items.any((item) => item.hasAbzug);
 
   /// Gesamtstückzahl aller Pakete
   int get totalQuantity => _items.fold(0, (sum, item) => sum + item.stueckzahl);
@@ -158,13 +189,11 @@ class CartProvider extends ChangeNotifier {
   Future<bool> addPackage(BuildContext context, Map<String, dynamic> packageData) async {
     final barcode = packageData['barcode']?.toString() ?? '';
 
-    // Prüfen ob bereits im Warenkorb
     if (containsPackage(barcode)) {
       showAppSnackbar(context, 'Paket ist bereits im Warenkorb');
       return false;
     }
 
-    // Prüfen ob bereits verkauft/ausgebucht
     final status = packageData['status']?.toString() ?? '';
     if (status == PackageStatus.verkauft || status == PackageStatus.ausgebucht) {
       showAppSnackbar(context, 'Paket ist bereits verkauft oder ausgebucht');
@@ -175,7 +204,6 @@ class CartProvider extends ChangeNotifier {
       final item = CartItem.fromPackageData(packageData);
       _items.add(item);
 
-      // Optional: In temporäre Collection speichern für Sync
       await _saveToTemporaryCart(item);
 
       notifyListeners();
@@ -205,13 +233,11 @@ class CartProvider extends ChangeNotifier {
   // KUNDEN AUSWAHL
   // ═══════════════════════════════════════════════════════════════
 
-  /// Setzt den ausgewählten Kunden
   void setCustomer(Map<String, dynamic>? customer) {
     _selectedCustomer = customer;
     notifyListeners();
   }
 
-  /// Entfernt den ausgewählten Kunden
   void clearCustomer() {
     _selectedCustomer = null;
     notifyListeners();
@@ -223,10 +249,7 @@ class CartProvider extends ChangeNotifier {
 
   Future<void> _saveToTemporaryCart(CartItem item) async {
     try {
-      await _db
-          .collection('temporary_cart')
-          .doc(item.barcode)
-          .set({
+      await _db.collection('temporary_cart').doc(item.barcode).set({
         ...item.toMap(),
         'timestamp': FieldValue.serverTimestamp(),
       });
@@ -262,10 +285,7 @@ class CartProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final snapshot = await _db
-          .collection('temporary_cart')
-          .orderBy('timestamp')
-          .get();
+      final snapshot = await _db.collection('temporary_cart').orderBy('timestamp').get();
 
       _items.clear();
       for (var doc in snapshot.docs) {
@@ -283,6 +303,8 @@ class CartProvider extends ChangeNotifier {
           zustand: data['zustand'] ?? '',
           kunde: data['kunde'],
           bemerkung: data['bemerkung'],
+          abzugStk: (data['abzugStk'] as num?)?.toInt() ?? 0,
+          abzugLaenge: (data['abzugLaenge'] as num?)?.toDouble() ?? 0,
         ));
       }
     } catch (e) {
@@ -317,13 +339,14 @@ class CartProvider extends ChangeNotifier {
           zustand: data['zustand'] ?? '',
           kunde: data['kunde'],
           bemerkung: data['bemerkung'],
+          abzugStk: (data['abzugStk'] as num?)?.toInt() ?? 0,
+          abzugLaenge: (data['abzugLaenge'] as num?)?.toDouble() ?? 0,
         ));
       }
       notifyListeners();
     });
   }
 
-  /// Stoppt Live-Sync
   void stopSync() {
     _cartSubscription?.cancel();
     _cartSubscription = null;
@@ -337,7 +360,7 @@ class CartProvider extends ChangeNotifier {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// KONSTANTEN (in constants.dart ergänzen falls nicht vorhanden)
+// KONSTANTEN
 // ═══════════════════════════════════════════════════════════════════════════
 
 class PackageStatus {

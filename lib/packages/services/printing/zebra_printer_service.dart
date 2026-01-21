@@ -284,8 +284,7 @@ class ZebraPrinterService {
         darkness: cached['darkness'] as double,
         printSpeed: cached['printSpeed'] as double,
         printWidth: cached['printWidth'] as int,
-        tearOff: cached['tearOff'] as int,
-        mediaType: cached['mediaType'] as String,
+
       );
     }
 
@@ -301,8 +300,7 @@ class ZebraPrinterService {
         'darkness': settings.darkness,
         'printSpeed': settings.printSpeed,
         'printWidth': settings.printWidth,
-        'tearOff': settings.tearOff,
-        'mediaType': settings.mediaType,
+
       });
 
       // 2. An Drucker senden (wenn online)

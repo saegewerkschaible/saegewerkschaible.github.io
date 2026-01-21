@@ -47,8 +47,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
             darkness: cached['darkness'] as double,
             printSpeed: cached['printSpeed'] as double,
             printWidth: cached['printWidth'] as int,
-            tearOff: cached['tearOff'] as int,
-            mediaType: cached['mediaType'] as String,
+
           );
           _isOnline = isOnline;
           _loadedFromCache = true;
@@ -92,8 +91,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
             'darkness': settings.darkness,
             'printSpeed': settings.printSpeed,
             'printWidth': settings.printWidth,
-            'tearOff': settings.tearOff,
-            'mediaType': settings.mediaType,
+
           });
 
           setState(() {
@@ -137,8 +135,7 @@ class _ZebraPrinterSettingsSheetState extends State<ZebraPrinterSettingsSheet> {
         'darkness': _settings!.darkness,
         'printSpeed': _settings!.printSpeed,
         'printWidth': _settings!.printWidth,
-        'tearOff': _settings!.tearOff,
-        'mediaType': _settings!.mediaType,
+
       });
 
       // 2. An Drucker senden (wenn online)

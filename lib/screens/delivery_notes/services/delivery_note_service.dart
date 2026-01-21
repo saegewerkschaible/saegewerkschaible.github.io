@@ -21,20 +21,16 @@ class DeliveryNoteService {
     Map<String, dynamic>? customer,
   }) async {
     try {
-      // 1. Lieferschein-Nummer generieren
       final number = await _getNextDeliveryNoteNumber();
 
-      // 2. PDF generieren
       final pdfBytes = await generatePDF(
         items: items,
         customer: customer,
         number: number,
       );
 
-      // 3. PDF in Storage hochladen
       final pdfUrl = await _uploadPDF(pdfBytes, number);
 
-      // 4. NEU: JSON generieren und hochladen
       final jsonData = generateExportJson(
         items: items,
         customer: customer,
@@ -42,27 +38,30 @@ class DeliveryNoteService {
       );
       final jsonUrl = await _uploadJSON(jsonData, number);
 
-      // 5. Lieferschein in Firestore speichern
+      // Berechne Summen MIT Abzug
+      final totalVolumeBrutto = items.fold<double>(0, (sum, item) => sum + item.menge);
+      final totalAbzug = items.fold<double>(0, (sum, item) => sum + item.abzugVolumen);
+      final totalVolumeNetto = items.fold<double>(0, (sum, item) => sum + item.nettoVolumen);
+
       final deliveryNoteData = {
         'number': number,
         'createdAt': FieldValue.serverTimestamp(),
         'customerName': customer?['name'] ?? 'Direktverkauf',
-        'customerData': customer,  // Enthält auch emailSettings!
-        'totalVolume': items.fold<double>(0, (sum, item) => sum + item.menge),
+        'customerData': customer,
+        'totalVolumeBrutto': totalVolumeBrutto,
+        'totalAbzug': totalAbzug,
+        'totalVolume': totalVolumeNetto,  // Netto als Hauptwert
         'totalQuantity': items.fold<int>(0, (sum, item) => sum + item.stueckzahl),
         'itemCount': items.length,
         'items': items.map((item) => item.toMap()).toList(),
         'pdfUrl': pdfUrl,
-        'jsonUrl': jsonUrl,  // NEU
+        'jsonUrl': jsonUrl,
         'status': 'completed',
       };
 
       final docRef = await _db.collection('delivery_notes').add(deliveryNoteData);
 
-      // 5. Pakete als verkauft markieren
       await _markPackagesAsSold(items, number);
-
-      // 6. Temporären Warenkorb leeren
       await _clearTemporaryCart();
 
       return {
@@ -80,7 +79,6 @@ class DeliveryNoteService {
     }
   }
 
-  /// Generiert die nächste Lieferschein-Nummer
   static Future<String> _getNextDeliveryNoteNumber() async {
     final counterRef = _db.collection('settings').doc('counters');
 
@@ -102,7 +100,6 @@ class DeliveryNoteService {
     });
   }
 
-  /// Lädt PDF in Firebase Storage hoch
   static Future<String> _uploadPDF(Uint8List pdfBytes, String number) async {
     final now = DateTime.now();
     final ref = _storage
@@ -116,7 +113,6 @@ class DeliveryNoteService {
     return await ref.getDownloadURL();
   }
 
-  /// Markiert alle Pakete als verkauft
   static Future<void> _markPackagesAsSold(List<CartItem> items, String deliveryNoteNumber) async {
     final batch = _db.batch();
     final now = DateTime.now();
@@ -134,7 +130,6 @@ class DeliveryNoteService {
     await batch.commit();
   }
 
-  /// Leert den temporären Warenkorb
   static Future<void> _clearTemporaryCart() async {
     final batch = _db.batch();
     final docs = await _db.collection('temporary_cart').get();
@@ -151,18 +146,17 @@ class DeliveryNoteService {
     required List<CartItem> items,
     Map<String, dynamic>? customer,
     required String number,
-  }) async
-  {
+  }) async {
     final pdf = pw.Document();
 
-    // Logo laden (optional)
     pw.MemoryImage? logo;
     try {
       final logoData = await rootBundle.load('assets/images/logo.png');
       logo = pw.MemoryImage(logoData.buffer.asUint8List());
-    } catch (_) {
-      // Logo nicht verfügbar
-    }
+    } catch (_) {}
+
+    // Prüfe ob Abzüge vorhanden sind
+    final hasAbzug = items.any((item) => item.hasAbzug);
 
     pdf.addPage(
       pw.Page(
@@ -171,22 +165,13 @@ class DeliveryNoteService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Header
               _buildPdfHeader(number, logo),
               pw.SizedBox(height: 24),
-
-              // Kundenadresse
               _buildPdfCustomerSection(customer),
               pw.SizedBox(height: 24),
-
-              // Pakettabelle
-              _buildPdfTable(items),
+              _buildPdfTable(items, hasAbzug),
               pw.SizedBox(height: 24),
-
-              // Summen
-              _buildPdfSummary(items),
-
-              // Footer
+              _buildPdfSummary(items, hasAbzug),
               pw.Expanded(child: pw.SizedBox()),
               _buildPdfFooter(),
             ],
@@ -197,7 +182,8 @@ class DeliveryNoteService {
 
     return pdf.save();
   }
-  /// Generiert den JSON-Export für den Lieferschein
+
+  /// Generiert den JSON-Export
   static Map<String, dynamic> generateExportJson({
     required List<CartItem> items,
     Map<String, dynamic>? customer,
@@ -240,7 +226,11 @@ class DeliveryNoteService {
           'breite': item.breite,
           'laenge': item.laenge,
           'stueckzahl': item.stueckzahl,
-          'menge': item.menge,
+          'mengeBrutto': item.menge,
+          'abzugStk': item.abzugStk,
+          'abzugLaenge': item.abzugLaenge,
+          'abzugVolumen': item.abzugVolumen,
+          'mengeNetto': item.nettoVolumen,
           'zustand': item.zustand,
           'bemerkung': item.bemerkung,
         };
@@ -248,12 +238,13 @@ class DeliveryNoteService {
       'summen': {
         'anzahlPakete': items.length,
         'gesamtStueckzahl': items.fold<int>(0, (sum, item) => sum + item.stueckzahl),
-        'gesamtVolumen': items.fold<double>(0, (sum, item) => sum + item.menge),
+        'gesamtVolumenBrutto': items.fold<double>(0, (sum, item) => sum + item.menge),
+        'gesamtAbzug': items.fold<double>(0, (sum, item) => sum + item.abzugVolumen),
+        'gesamtVolumenNetto': items.fold<double>(0, (sum, item) => sum + item.nettoVolumen),
       },
     };
   }
 
-  /// Lädt JSON in Firebase Storage hoch
   static Future<String> _uploadJSON(Map<String, dynamic> jsonData, String number) async {
     final now = DateTime.now();
     final ref = _storage
@@ -269,7 +260,6 @@ class DeliveryNoteService {
     await ref.putData(bytes, SettableMetadata(contentType: 'application/json'));
     return await ref.getDownloadURL();
   }
-
 
   static pw.Widget _buildPdfHeader(String number, pw.MemoryImage? logo) {
     return pw.Row(
@@ -304,7 +294,6 @@ class DeliveryNoteService {
   }
 
   static pw.Widget _buildPdfCustomerSection(Map<String, dynamic>? customer) {
-
     if (customer == null) {
       return pw.Text('', style: pw.TextStyle(fontWeight: pw.FontWeight.bold));
     }
@@ -332,30 +321,50 @@ class DeliveryNoteService {
     );
   }
 
-  static pw.Widget _buildPdfTable(List<CartItem> items) {
+  static pw.Widget _buildPdfTable(List<CartItem> items, bool hasAbzug) {
+    // Spaltenbreiten anpassen je nachdem ob Abzug vorhanden
+    final columnWidths = hasAbzug
+        ? {
+      0: const pw.FlexColumnWidth(1.2), // Barcode
+      1: const pw.FlexColumnWidth(1.2), // Holzart
+      2: const pw.FlexColumnWidth(0.8), // H
+      3: const pw.FlexColumnWidth(0.8), // B
+      4: const pw.FlexColumnWidth(0.8), // L
+      5: const pw.FlexColumnWidth(0.6), // Stk
+      6: const pw.FlexColumnWidth(1),   // Brutto
+      7: const pw.FlexColumnWidth(1.1), // Abzug (mit Details)
+      8: const pw.FlexColumnWidth(1),   // Netto
+    }
+        : {
+      0: const pw.FlexColumnWidth(1.5), // Barcode
+      1: const pw.FlexColumnWidth(1.5), // Holzart
+      2: const pw.FlexColumnWidth(1),   // H
+      3: const pw.FlexColumnWidth(1),   // B
+      4: const pw.FlexColumnWidth(1),   // L
+      5: const pw.FlexColumnWidth(0.8), // Stk
+      6: const pw.FlexColumnWidth(1.2), // m³
+    };
+
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.blueGrey200, width: 0.5),
-      columnWidths: {
-        0: const pw.FlexColumnWidth(1.5), // Barcode
-        1: const pw.FlexColumnWidth(1.5), // Holzart
-        2: const pw.FlexColumnWidth(1),   // H
-        3: const pw.FlexColumnWidth(1),   // B
-        4: const pw.FlexColumnWidth(1),   // L
-        5: const pw.FlexColumnWidth(0.8), // Stk
-        6: const pw.FlexColumnWidth(1.2), // m³
-      },
+      columnWidths: columnWidths,
       children: [
         // Header
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
           children: [
-            _tableHeader('Paket-Nr.'),
+            _tableHeader('Paket'),
             _tableHeader('Holzart'),
-            _tableHeader('H [mm]'),
-            _tableHeader('B [mm]'),
-            _tableHeader('L [m]'),
+            _tableHeader('H'),
+            _tableHeader('B'),
+            _tableHeader('L'),
             _tableHeader('Stk'),
-            _tableHeader('m³'),
+            if (hasAbzug) ...[
+              _tableHeader('Brutto'),
+              _tableHeader('Abzug'),
+              _tableHeader('Netto'),
+            ] else
+              _tableHeader('m³'),
           ],
         ),
         // Datenzeilen
@@ -367,32 +376,69 @@ class DeliveryNoteService {
             _tableCell(item.breite.toStringAsFixed(0)),
             _tableCell(item.laenge.toStringAsFixed(2)),
             _tableCell(item.stueckzahl.toString()),
-            _tableCell(item.menge.toStringAsFixed(3)),
+            if (hasAbzug) ...[
+              _tableCell(item.menge.toStringAsFixed(3)),
+              // Abzug-Zelle mit Details
+              _tableAbzugCell(item),
+              _tableCell(item.nettoVolumen.toStringAsFixed(3)),
+            ] else
+              _tableCell(item.menge.toStringAsFixed(3)),
           ],
         )),
       ],
     );
   }
 
+  static pw.Widget _tableAbzugCell(CartItem item) {
+    if (!item.hasAbzug) {
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(6),
+        child: pw.Text('-', style: const pw.TextStyle(fontSize: 9)),
+      );
+    }
+
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Volumen
+          pw.Text(
+            '-${item.abzugVolumen.toStringAsFixed(3)}',
+            style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 2),
+          // Details: Stk × Länge
+          pw.Text(
+            '${item.abzugStk} Stk × ${item.abzugLaenge}m',
+            style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),
+          ),
+        ],
+      ),
+    );
+  }
+
   static pw.Widget _tableHeader(String text) {
     return pw.Container(
-      padding: const pw.EdgeInsets.all(8),
+      padding: const pw.EdgeInsets.all(6),
       child: pw.Text(
         text,
-        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+        style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
       ),
     );
   }
 
   static pw.Widget _tableCell(String text) {
     return pw.Container(
-      padding: const pw.EdgeInsets.all(8),
-      child: pw.Text(text, style: const pw.TextStyle(fontSize: 10)),
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(text, style: const pw.TextStyle(fontSize: 9)),
     );
   }
 
-  static pw.Widget _buildPdfSummary(List<CartItem> items) {
-    final totalVolume = items.fold<double>(0, (sum, item) => sum + item.menge);
+  static pw.Widget _buildPdfSummary(List<CartItem> items, bool hasAbzug) {
+    final totalBrutto = items.fold<double>(0, (sum, item) => sum + item.menge);
+    final totalAbzug = items.fold<double>(0, (sum, item) => sum + item.abzugVolumen);
+    final totalNetto = items.fold<double>(0, (sum, item) => sum + item.nettoVolumen);
     final totalQuantity = items.fold<int>(0, (sum, item) => sum + item.stueckzahl);
 
     return pw.Container(
@@ -422,13 +468,45 @@ class DeliveryNoteService {
               ],
             ),
             pw.SizedBox(height: 4),
-            pw.Row(
-              mainAxisSize: pw.MainAxisSize.min,
-              children: [
-                pw.Text('Gesamtvolumen: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                pw.Text('${totalVolume.toStringAsFixed(3)} m³'),
-              ],
-            ),
+            if (hasAbzug) ...[
+              pw.Row(
+                mainAxisSize: pw.MainAxisSize.min,
+                children: [
+                  pw.Text('Brutto: ', style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text('${totalBrutto.toStringAsFixed(3)} m³', style: const pw.TextStyle(fontSize: 10)),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisSize: pw.MainAxisSize.min,
+                children: [
+                  pw.Text('Abzug: ', style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text('-${totalAbzug.toStringAsFixed(3)} m³', style: const pw.TextStyle(fontSize: 10)),
+                ],
+              ),
+              pw.SizedBox(height: 4),
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: pw.BoxDecoration(
+                  color: PdfColors.blueGrey100,
+                  borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                ),
+                child: pw.Row(
+                  mainAxisSize: pw.MainAxisSize.min,
+                  children: [
+                    pw.Text('Netto: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                    pw.Text('${totalNetto.toStringAsFixed(3)} m³', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ] else
+              pw.Row(
+                mainAxisSize: pw.MainAxisSize.min,
+                children: [
+                  pw.Text('Gesamtvolumen: ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                  pw.Text('${totalNetto.toStringAsFixed(3)} m³'),
+                ],
+              ),
           ],
         ),
       ),
@@ -459,7 +537,6 @@ class DeliveryNoteService {
               pw.Text('info@saegewerk-schaible.de', style: const pw.TextStyle(fontSize: 8)),
             ],
           ),
-
         ],
       ),
     );

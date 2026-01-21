@@ -17,7 +17,7 @@ class LocationSection extends StatefulWidget {
 
   // Pin-Properties
   final bool isPinned;
-  final VoidCallback onTogglePin;
+  final VoidCallback? onTogglePin;
 
   const LocationSection({
     super.key,
@@ -26,7 +26,7 @@ class LocationSection extends StatefulWidget {
     this.isInvalid = false,
     this.onChanged,
     this.isPinned = false,
-    required this.onTogglePin,
+    this.onTogglePin,
   });
 
   @override
@@ -71,10 +71,11 @@ class _LocationSectionState extends State<LocationSection> {
                 ),
                 const Spacer(),
                 // Dezenter Pin-Button
-                _PinButton(
-                  isPinned: widget.isPinned,
-                  onToggle: widget.onTogglePin,
-                ),
+                if (widget.onTogglePin != null)
+                  _PinButton(
+                    isPinned: widget.isPinned,
+                    onToggle: widget.onTogglePin!,
+                  ),
               ],
             ),
             const SizedBox(height: 12),

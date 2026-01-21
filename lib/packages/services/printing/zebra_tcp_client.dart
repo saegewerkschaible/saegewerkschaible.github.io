@@ -9,15 +9,13 @@ class ZebraPrinterSettings {
   final double darkness;
   final double printSpeed;
   final int printWidth;
-  final int tearOff;
-  final String mediaType;
+
 
   const ZebraPrinterSettings({
     this.darkness = 15.0,
     this.printSpeed = 4.0,
     this.printWidth = 1200,
-    this.tearOff = 0,
-    this.mediaType = 'MARK',
+
   });
 
   /// 300 DPI: 12 dots = 1mm
@@ -27,30 +25,26 @@ class ZebraPrinterSettings {
     double? darkness,
     double? printSpeed,
     int? printWidth,
-    int? tearOff,
-    String? mediaType,
+
   }) => ZebraPrinterSettings(
     darkness: darkness ?? this.darkness,
     printSpeed: printSpeed ?? this.printSpeed,
     printWidth: printWidth ?? this.printWidth,
-    tearOff: tearOff ?? this.tearOff,
-    mediaType: mediaType ?? this.mediaType,
+
   );
 
   Map<String, dynamic> toMap() => {
     'darkness': darkness,
     'printSpeed': printSpeed,
     'printWidth': printWidth,
-    'tearOff': tearOff,
-    'mediaType': mediaType,
+
   };
 
   factory ZebraPrinterSettings.fromMap(Map<String, dynamic> map) => ZebraPrinterSettings(
     darkness: (map['darkness'] ?? 15.0).toDouble(),
     printSpeed: (map['printSpeed'] ?? 4.0).toDouble(),
     printWidth: map['printWidth'] ?? 1200,
-    tearOff: map['tearOff'] ?? 0,
-    mediaType: map['mediaType'] ?? 'MARK',
+
   );
 
   @override
@@ -201,15 +195,13 @@ class ZebraTcpClient {
       final darkness = await _getVar('print.tone');
       final speed = await _getVar('media.speed');
       final width = await _getVar('ezpl.print_width');
-      final media = await _getVar('ezpl.media_type');
-      final tear = await _getVar('ezpl.tear_off');
+
 
       return ZebraPrinterSettings(
         darkness: (double.tryParse(darkness ?? '15') ?? 15).clamp(0, 30).toDouble(),
         printSpeed: (double.tryParse(speed ?? '4') ?? 4).clamp(2, 6).toDouble(),
         printWidth: (int.tryParse(width ?? '1200') ?? 1200).clamp(200, 1280),
-        mediaType: media ?? 'MARK',
-        tearOff: int.tryParse(tear ?? '0') ?? 0,
+
       );
     } catch (e) {
       print('ZebraTCP: Einstellungen lesen fehlgeschlagen: $e');
@@ -223,7 +215,6 @@ class ZebraTcpClient {
       await _setVar('print.tone', settings.darkness.round().toString());
       await _setVar('media.speed', settings.printSpeed.round().toString());
       await _setVar('ezpl.print_width', settings.printWidth.toString());
-      await _setVar('ezpl.tear_off', settings.tearOff.toString());
 
       // Permanent speichern
       await _sendString('^XA^JUS^XZ');

@@ -7,12 +7,19 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:saegewerk/packages/services/zebra_pdf_generator.dart';
 import 'package:saegewerk/packages/widgets/edit_package_widget.dart';
 
 import '../../core/theme/theme_provider.dart';
 import '../../constants.dart';
 
 import 'barcode_scanner_page.dart';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 
 class ScannerScreen extends StatefulWidget {
   final int userGroup;
@@ -133,6 +140,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         ),
                       ),
                       const Spacer(),
+                      // NEU: PDF Download Button
+                      IconButton(
+                        icon: Icon(Icons.picture_as_pdf, color: theme.primary),
+                        tooltip: 'PDF herunterladen',
+                        onPressed: () => _downloadPdf(data),
+                      ),
+                      const SizedBox(width: 8),
                       IconButton(
                         icon: Icon(Icons.close, color: theme.textSecondary),
                         onPressed: () => Navigator.pop(ctx),
@@ -140,6 +154,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     ],
                   ),
                 ),
+
                 Divider(height: 1, color: theme.border),
                 Expanded(
                   child: EditPackageWidget(
@@ -205,6 +220,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         ),
                       ),
                       const Spacer(),
+                      // NEU: PDF Download Button
+                      IconButton(
+                        icon: Icon(Icons.picture_as_pdf, color: theme.primary),
+                        tooltip: 'PDF herunterladen',
+                        onPressed: () => _downloadPdf(data),
+                      ),
+                      const SizedBox(width: 4),
                       IconButton(
                         icon: Icon(Icons.close, color: theme.textSecondary),
                         onPressed: () => Navigator.pop(ctx),
@@ -212,6 +234,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                     ],
                   ),
                 ),
+
                 Divider(height: 1, color: theme.border),
                 Expanded(
                   child: EditPackageWidget(
@@ -232,6 +255,39 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
+  Future<void> _downloadPdf(Map<String, dynamic> data) async {
+    try {
+      // Daten für PDF vorbereiten
+      final printData = {
+        'Barcode': data['barcode']?.toString() ?? '',
+        'Nr': data['barcode']?.toString() ?? '',
+        'Kunde': data['kunde']?.toString() ?? '',
+        'Auftragsnr': data['auftragsnr']?.toString() ?? '',
+        'Holzart': data['holzart']?.toString() ?? '',
+        'H': data['hoehe']?.toString() ?? '',
+        'B': data['breite']?.toString() ?? '',
+        'L': data['laenge']?.toString() ?? '',
+        'Stk': data['stueckzahl']?.toString() ?? '',
+        'Menge': data['menge']?.toString() ?? '',
+        'Bemerkung': data['bemerkung']?.toString() ?? '',
+        'Nr_ext': data['nrExt']?.toString() ?? '',
+        'AbzugStk': data['abzugStk']?.toString() ?? '',
+        'AbzugLaenge': data['abzugLaenge']?.toString() ?? '',
+      };
+
+      // PDF generieren
+      final pdfFile = await ZebraPdfGenerator.generatePackageLabel(printData, 100.0);
+
+      // Teilen/Download
+      await Share.shareXFiles(
+        [XFile(pdfFile.path)],
+        subject: 'Paketzettel ${data['barcode']}',
+      );
+    } catch (e) {
+      if (mounted) {
+        showAppSnackbar(context, 'Fehler beim Erstellen des PDFs: $e');
+      }
+    }}
   void _showNewPackageSheet() {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     final isWideScreen = MediaQuery.of(context).size.width > 800;

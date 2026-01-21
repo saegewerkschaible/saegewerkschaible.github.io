@@ -63,6 +63,8 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   late TextEditingController bemerkungController;
   late TextEditingController saegerController;
   late TextEditingController statusController;
+  late TextEditingController abzugStkController;
+  late TextEditingController abzugLaengeController;
 
   // Expansion State
   List<bool> _isExpanded = [true, true, true, true, true];
@@ -77,6 +79,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   bool _pinStaerke = false;
   bool _pinBreite = false;
   bool _pinLaenge = false;
+  bool _pinAbzugLaenge = false;
   DocumentReference get _pinSettingsRef => FirebaseFirestore.instance
       .collection('settings')
       .doc('package_pins');
@@ -111,7 +114,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
           _pinStaerke = data['staerke'] ?? false;
           _pinBreite = data['breite'] ?? false;
           _pinLaenge = data['laenge'] ?? false;
-
+          _pinAbzugLaenge = data['abzugLaenge'] ?? false;
           // Gepinnte Werte laden
           if (_pinHolzart && data['holzartValue'] != null) {
             holzartController.text = data['holzartValue'];
@@ -131,6 +134,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
           }
           if (_pinLaenge && data['laengeValue'] != null) {
             lController.text = data['laengeValue'];
+          }
+          if (_pinAbzugLaenge && data['abzugLaengeValue'] != null) {
+            abzugLaengeController.text = data['abzugLaengeValue'];
           }
         });
 
@@ -164,6 +170,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         case 'laenge':
           _pinLaenge = !_pinLaenge;
           break;
+        case 'abzugLaenge':
+          _pinAbzugLaenge = !_pinAbzugLaenge;
+          break;
       }
     });
 
@@ -176,6 +185,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         'staerke': _pinStaerke,
         'breite': _pinBreite,
         'laenge': _pinLaenge,
+        'abzugLaenge': _pinAbzugLaenge,
         // Werte
         'holzartValue': _pinHolzart ? holzartController.text : null,
         'kundeValue': _pinKunde ? kundeController.text : null,
@@ -184,6 +194,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         'staerkeValue': _pinStaerke ? hController.text : null,
         'breiteValue': _pinBreite ? bController.text : null,
         'laengeValue': _pinLaenge ? lController.text : null,
+        'abzugLaengeValue': _pinAbzugLaenge ? abzugLaengeController.text : null,
       }, SetOptions(merge: true));
     } catch (e) {
       debugPrint('Fehler beim Speichern der Pin-Einstellungen: $e');
@@ -213,6 +224,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       case 'laenge':
         shouldUpdate = _pinLaenge;
         break;
+      case 'abzugLaenge':
+        shouldUpdate = _pinAbzugLaenge;
+        break;
     }
 
     if (shouldUpdate) {
@@ -240,6 +254,8 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       'Menge': mengeController.text,
       'Bemerkung': bemerkungController.text,
       'Nr_ext': nrExtController.text,
+      'AbzugStk': abzugStkController.text,        // <-- NEU
+      'AbzugLaenge': abzugLaengeController.text,
     };
 
     // 2. Speichern
@@ -266,6 +282,8 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
 
   void _initControllers() {
     final data = widget.packageData;
+    abzugStkController = TextEditingController(text: data?['abzugStk']?.toString() ?? '');
+    abzugLaengeController = TextEditingController(text: data?['abzugLaenge']?.toString() ?? '');
 
     barcodeController = TextEditingController(text: data?['barcode']?.toString() ?? '');
     nrExtController = TextEditingController(text: data?['nrExt']?.toString() ?? '');
@@ -314,6 +332,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
     bemerkungController.dispose();
     saegerController.dispose();
     statusController.dispose();
+    abzugStkController.dispose();
+    abzugLaengeController.dispose();
+
     super.dispose();
   }
 
@@ -371,6 +392,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         'laenge': double.tryParse(lController.text) ?? 0,
         'stueckzahl': int.tryParse(stkController.text) ?? 0,
         'menge': double.tryParse(mengeController.text) ?? 0,
+        'abzugStk': int.tryParse(abzugStkController.text) ?? 0,
+        'abzugLaenge': double.tryParse(abzugLaengeController.text) ?? 0,
+
         'zustand': zustandController.text,
         'lagerort': lagerortController.text,
         'bemerkung': bemerkungController.text,
@@ -408,6 +432,8 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       stkController.clear();
       mengeController.text = '0.000';
       bemerkungController.clear();
+      abzugStkController.clear();
+      if (!_pinAbzugLaenge) abzugLaengeController.clear();
 
       // Nur leeren wenn NICHT gepinnt
       if (!_pinHolzart) holzartController.clear();
@@ -479,10 +505,11 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                     saegerController: saegerController,
                     invalidFields: invalidFields,
                     packageService: _packageService,
-                    pinHolzart: _pinHolzart,           // NEU
-                    pinKunde: _pinKunde,               // NEU
-                    onTogglePin: _togglePin,           // NEU
-                    onPinnedValueChanged: _updatePinnedValue,  // NEU
+                    pinHolzart: widget.isNewPackage ? _pinHolzart : false,      // GEÄNDERT
+                    pinKunde: widget.isNewPackage ? _pinKunde : false,          // GEÄNDERT
+                    onTogglePin: widget.isNewPackage ? _togglePin : null,       // GEÄNDERT
+                    onPinnedValueChanged: widget.isNewPackage ? _updatePinnedValue : null,  // GEÄNDERT
+
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -502,11 +529,20 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                     stkController: stkController,
                     mengeController: mengeController,
                     invalidFields: invalidFields,
+                    abzugStkController: abzugStkController,
+                    abzugLaengeController: abzugLaengeController,
+
                     onRecalculateVolume: _recalculateVolume,
                     onStkFieldTap: () => showCalculatorDialog(
                       context: context,
                       controller: stkController,
                       onValueChanged: _recalculateVolume,
+                      allowDecimals: false,
+                    ),
+                    onAbzugStkFieldTap: () => showCalculatorDialog(
+                      context: context,
+                      controller: abzugStkController,
+                      onValueChanged: () => setState(() {}),
                       allowDecimals: false,
                     ),
                     onSelectFieldTap: (label, controller, options) {
@@ -524,11 +560,13 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                         onValidationError: (msg) => showAppSnackbar(context, msg),
                       );
                     },
-                    pinStaerke: _pinStaerke,
-                    pinBreite: _pinBreite,
-                    pinLaenge: _pinLaenge,
-                    onTogglePin: _togglePin,
-                    onPinnedValueChanged: _updatePinnedValue,
+                    pinStaerke: widget.isNewPackage ? _pinStaerke : false,      // GEÄNDERT
+                    pinBreite: widget.isNewPackage ? _pinBreite : false,        // GEÄNDERT
+                    pinLaenge: widget.isNewPackage ? _pinLaenge : false,        // GEÄNDERT
+                    pinAbzugLaenge: widget.isNewPackage ? _pinAbzugLaenge : false,  // NEU
+                    onTogglePin: widget.isNewPackage ? _togglePin : null,       // GEÄNDERT
+                    onPinnedValueChanged: widget.isNewPackage ? _updatePinnedValue : null,  // GEÄNDERT
+
 
                   ),
                 ),
@@ -561,9 +599,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                   child: LocationSection(
                     controller: lagerortController,
                     packageService: _packageService,
-                    isPinned: _pinLagerort,
-                    onTogglePin: () => _togglePin('lagerort'),
-                    onChanged: (v) => _updatePinnedValue('lagerort', v),
+                    isPinned: widget.isNewPackage ? _pinLagerort : false,       // GEÄNDERT
+                    onTogglePin: widget.isNewPackage ? () => _togglePin('lagerort') : null,  // GEÄNDERT
+                    onChanged: widget.isNewPackage ? (v) => _updatePinnedValue('lagerort', v) : null,  // GEÄNDERT
+
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -643,10 +682,11 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
               saegerController: saegerController,
               invalidFields: invalidFields,
               packageService: _packageService,
-              pinHolzart: _pinHolzart,
-              pinKunde: _pinKunde,
-              onTogglePin: _togglePin,
-              onPinnedValueChanged: _updatePinnedValue,
+              pinHolzart: widget.isNewPackage ? _pinHolzart : false,      // GEÄNDERT
+              pinKunde: widget.isNewPackage ? _pinKunde : false,          // GEÄNDERT
+              onTogglePin: widget.isNewPackage ? _togglePin : null,       // GEÄNDERT
+              onPinnedValueChanged: widget.isNewPackage ? _updatePinnedValue : null,  // GEÄNDERT
+
             ),
           ),
           const SizedBox(height: 8),
@@ -665,12 +705,20 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
               lController: lController,
               stkController: stkController,
               mengeController: mengeController,
+              abzugStkController: abzugStkController,
+              abzugLaengeController: abzugLaengeController,
               invalidFields: invalidFields,
               onRecalculateVolume: _recalculateVolume,
               onStkFieldTap: () => showCalculatorDialog(
                 context: context,
                 controller: stkController,
                 onValueChanged: _recalculateVolume,
+                allowDecimals: false,
+              ),
+              onAbzugStkFieldTap: () => showCalculatorDialog(
+                context: context,
+                controller: abzugStkController,
+                onValueChanged: () => setState(() {}),
                 allowDecimals: false,
               ),
               onSelectFieldTap: (label, controller, options) {
@@ -688,11 +736,12 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                   onValidationError: (msg) => showAppSnackbar(context, msg),
                 );
               },
-              pinStaerke: _pinStaerke,
-              pinBreite: _pinBreite,
-              pinLaenge: _pinLaenge,
-              onTogglePin: _togglePin,
-              onPinnedValueChanged: _updatePinnedValue,
+              pinStaerke: widget.isNewPackage ? _pinStaerke : false,      // GEÄNDERT
+              pinBreite: widget.isNewPackage ? _pinBreite : false,        // GEÄNDERT
+              pinLaenge: widget.isNewPackage ? _pinLaenge : false,        // GEÄNDERT
+              pinAbzugLaenge: widget.isNewPackage ? _pinAbzugLaenge : false,  // NEU
+              onTogglePin: widget.isNewPackage ? _togglePin : null,       // GEÄNDERT
+              onPinnedValueChanged: widget.isNewPackage ? _updatePinnedValue : null,  // GEÄNDERT
 
 
 
@@ -711,9 +760,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
             child: LocationSection(
               controller: lagerortController,
               packageService: _packageService,
-              isPinned: _pinLagerort,
-              onTogglePin: () => _togglePin('lagerort'),
-              onChanged: (v) => _updatePinnedValue('lagerort', v),
+              isPinned: widget.isNewPackage ? _pinLagerort : false,       // GEÄNDERT
+              onTogglePin: widget.isNewPackage ? () => _togglePin('lagerort') : null,  // GEÄNDERT
+              onChanged: widget.isNewPackage ? (v) => _updatePinnedValue('lagerort', v) : null,  // GEÄNDERT
+
 
             ),
           ),
@@ -883,7 +933,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
             child: OutlinedButton.icon(
               onPressed: _saveChanges,
               icon: const Icon(Icons.save),
-              label: const Text('Nur Erstellen'),
+              label: Text(widget.isNewPackage ? 'Nur Erstellen' : 'Nur Speichern'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: theme.primary,
                 side: BorderSide(color: theme.primary),

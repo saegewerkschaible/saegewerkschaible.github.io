@@ -31,8 +31,8 @@ class MainInfoSection extends StatefulWidget {
   // Pin-Properties
   final bool pinHolzart;
   final bool pinKunde;
-  final Function(String) onTogglePin;
-  final Function(String, String) onPinnedValueChanged;
+  final Function(String)? onTogglePin;
+  final Function(String, String)? onPinnedValueChanged;
 
   const MainInfoSection({
     super.key,
@@ -48,8 +48,8 @@ class MainInfoSection extends StatefulWidget {
     required this.packageService,
     this.pinHolzart = false,
     this.pinKunde = false,
-    required this.onTogglePin,
-    required this.onPinnedValueChanged,
+    this.onTogglePin,
+    this.onPinnedValueChanged,
   });
 
   @override
@@ -100,11 +100,19 @@ class _MainInfoSectionState extends State<MainInfoSection> {
         Row(
           children: [
             Expanded(
-              child: InputField(
+              child: _buildTapField(
+                context: context,
                 label: 'Externe Nr.',
                 controller: widget.nrExtController,
                 icon: Icons.numbers,
                 iconName: 'numbers',
+                onTap: () async {
+                  await showCustomKeyboardDialog(
+                    context: context,
+                    controller:widget.nrExtController,
+                  );
+                  setState(() {});
+                },
               ),
             ),
             const SizedBox(width: 12),
@@ -222,7 +230,7 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                   allowCustomInput: allowCustomInput,
                   onSelect: (v) {
                     controller.text = v;
-                    widget.onPinnedValueChanged(pinField, v);
+                    widget.onPinnedValueChanged?.call(pinField, v);
                     setState(() {});
                   },
                 ),
@@ -263,12 +271,13 @@ class _MainInfoSectionState extends State<MainInfoSection> {
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            // Dezenter Pin-Button
-            _PinButton(
-              isPinned: isPinned,
-              onToggle: () => widget.onTogglePin(pinField),
-            ),
+            if (widget.onTogglePin != null) ...[
+              const SizedBox(width: 8),
+              _PinButton(
+                isPinned: isPinned,
+                onToggle: () => widget.onTogglePin!(pinField),
+              ),
+            ],
           ],
         ),
       ],

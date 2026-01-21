@@ -36,8 +36,20 @@ class ZebraPdfGenerator {
     String nrExt = data['Nr_ext']?.toString() ?? '';
     if (nrExt.isNotEmpty) printLength += 8;
 
+    // Abzug prüfen - extra Höhe wenn vorhanden
+    final abzugStk = _parseInt(data['AbzugStk']?.toString());
+    final hasAbzug = abzugStk > 0;
+    if (hasAbzug) printLength += 24; // Platz für Abzug-Zeile
+
     // Volumen berechnen
-    double totalVolume = _calculateVolume(data, isLamelle);
+    double bruttoVolume = _calculateVolume(data, isLamelle);
+    double abzugVolume = 0;
+    double nettoVolume = bruttoVolume;
+
+    if (hasAbzug) {
+      abzugVolume = _calculateAbzugVolume(data);
+      nettoVolume = bruttoVolume - abzugVolume;
+    }
 
     // Seitenformat
     final pageFormat = PdfPageFormat(
@@ -77,13 +89,20 @@ class ZebraPdfGenerator {
       content.addAll(_buildLamellenRows(data));
     }
 
-    // Zusatzinfos
-    content.addAll([
-      _buildRow('Menge', '${totalVolume.toStringAsFixed(2)} m³'),
-      if (bemerkung.isNotEmpty) _buildRow('Info', bemerkung),
-      if (nrExt.isNotEmpty) _buildRow('Nr. ext.', nrExt),
+    // Volumen-Bereich
+    if (hasAbzug) {
+      // Mit Abzug: Brutto, Abzug-Zeile, Netto
+      content.add(_buildRow('Brutto', '${bruttoVolume.toStringAsFixed(3)} m³'));
+      content.add(_buildAbzugRow(data, abzugVolume));
+      content.add(_buildNettoRow(nettoVolume));
+    } else {
+      // Ohne Abzug: nur Menge
+      content.add(_buildRow('Menge', '${bruttoVolume.toStringAsFixed(3)} m³'));
+    }
 
-    ]);
+    // Zusatzinfos
+    if (bemerkung.isNotEmpty) content.add(_buildRow('Info', bemerkung));
+    if (nrExt.isNotEmpty) content.add(_buildRow('Nr. ext.', nrExt));
 
     pdf.addPage(
       pw.Page(
@@ -103,6 +122,9 @@ class ZebraPdfGenerator {
 
   // ==================== HELPER ====================
 
+  static double _parseDouble(String? v) => double.tryParse((v ?? '').replaceAll(',', '.')) ?? 0.0;
+  static int _parseInt(String? v) => int.tryParse(v ?? '') ?? 0;
+
   static pw.Widget _buildRow(String label, String value) {
     return pw.Container(
       decoration: pw.BoxDecoration(
@@ -113,10 +135,42 @@ class ZebraPdfGenerator {
         crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
           pw.Expanded(flex: 3, child: pw.Text(label, style: pw.TextStyle(fontSize: 14))),
-          pw.Expanded(flex: 6, child: pw.Text(value, style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold))),
+          pw.Expanded(flex: 6, child: pw.Text(value, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold))),
         ],
       ),
     );
+  }
+
+  static pw.Widget _buildAbzugRow(Map<String, dynamic> data, double abzugVolume) {
+    final abzugStk = _parseInt(data['AbzugStk']?.toString());
+    final abzugL = _parseDouble(data['AbzugLaenge']?.toString());
+
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
+      ),
+      padding: const pw.EdgeInsets.symmetric(vertical: 3),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Expanded(
+            flex: 3,
+            child: pw.Text('Abzug', style: pw.TextStyle(fontSize: 14)),
+          ),
+          pw.Expanded(
+            flex: 6,
+            child: pw.Text(
+              '-$abzugStk x ${abzugL}m = -${abzugVolume.toStringAsFixed(3)} m³',
+              style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static pw.Widget _buildNettoRow(double nettoVolume) {
+    return _buildRow('Netto', '${nettoVolume.toStringAsFixed(3)} m³');
   }
 
   static pw.Widget _buildBarcodeBox(Map<String, dynamic> data, PdfPageFormat format) {
@@ -163,37 +217,41 @@ class ZebraPdfGenerator {
     if (data['useKundeAlias'] == true && (data['kundeAlias']?.toString() ?? '').isNotEmpty) {
       name = data['kundeAlias'].toString();
     }
-    return name.length > 16 ? '${name.substring(0, 14)}...' : name;
+    return name.length > 19 ? '${name.substring(0, 19)}...' : name;
   }
 
   static double _calculateVolume(Map<String, dynamic> data, bool isLamelle) {
-    double parseDouble(String? v) => double.tryParse((v ?? '').replaceAll(',', '.')) ?? 0.0;
-    int parseInt(String? v) => int.tryParse(v ?? '') ?? 0;
-
     if (isLamelle) {
       final lam = data['Lamellen'] as Map<String, dynamic>? ?? {};
-      double h = parseDouble(data['H']?.toString());
-      double b = parseDouble(data['B']?.toString());
+      double h = _parseDouble(data['H']?.toString());
+      double b = _parseDouble(data['B']?.toString());
 
       double vol = 0.0;
-      vol += 5.0 * (parseInt(lam['5.0']?.toString())) * h * b;
-      vol += 4.5 * (parseInt(lam['4.5']?.toString())) * h * b;
-      vol += 4.0 * (parseInt(lam['4.0']?.toString())) * h * b;
-      vol += 3.5 * (parseInt(lam['3.5']?.toString())) * h * b;
-      vol += 3.0 * (parseInt(lam['3.0']?.toString())) * h * b;
+      vol += 5.0 * (_parseInt(lam['5.0']?.toString())) * h * b;
+      vol += 4.5 * (_parseInt(lam['4.5']?.toString())) * h * b;
+      vol += 4.0 * (_parseInt(lam['4.0']?.toString())) * h * b;
+      vol += 3.5 * (_parseInt(lam['3.5']?.toString())) * h * b;
+      vol += 3.0 * (_parseInt(lam['3.0']?.toString())) * h * b;
       return vol / 1000000.0;
     }
 
-    double b = parseDouble(data['B']?.toString());
-    double h = parseDouble(data['H']?.toString());
-    double l = parseDouble(data['L']?.toString());
-    int stk = parseInt(data['Stk']?.toString());
+    double b = _parseDouble(data['B']?.toString());
+    double h = _parseDouble(data['H']?.toString());
+    double l = _parseDouble(data['L']?.toString());
+    int stk = _parseInt(data['Stk']?.toString());
     return (b * h * l * stk) / 1000000.0;
+  }
+
+  static double _calculateAbzugVolume(Map<String, dynamic> data) {
+    double h = _parseDouble(data['H']?.toString());
+    double b = _parseDouble(data['B']?.toString());
+    double abzugL = _parseDouble(data['AbzugLaenge']?.toString());
+    int abzugStk = _parseInt(data['AbzugStk']?.toString());
+    return (h * b * abzugL * abzugStk) / 1000000.0;
   }
 
   static List<pw.Widget> _buildLamellenRows(Map<String, dynamic> data) {
     final lam = data['Lamellen'] as Map<String, dynamic>? ?? {};
-    int parseInt(String? v) => int.tryParse(v ?? '') ?? 0;
 
     final lengths = [
       {'display': '5,0 m', 'key': '5.0'},
@@ -205,7 +263,7 @@ class ZebraPdfGenerator {
 
     final rows = <pw.Widget>[];
     for (var l in lengths) {
-      rows.add(_buildRow(l['display']!, '${parseInt(lam[l['key']]?.toString())}'));
+      rows.add(_buildRow(l['display']!, '${_parseInt(lam[l['key']]?.toString())}'));
     }
     rows.add(_buildRow('Stk gesamt', data['Stk']?.toString() ?? '0'));
     return rows;

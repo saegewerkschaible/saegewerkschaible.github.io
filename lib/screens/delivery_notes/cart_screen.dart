@@ -654,6 +654,98 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Widget _buildSummarySection(ThemeProvider theme, CartProvider cart, {bool isDesktop = false}) {
+    // Wenn Abzüge vorhanden, erweiterte Anzeige
+    if (cart.hasAbzug) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        color: theme.surface,
+        child: Column(
+          children: [
+            // Erste Zeile: Pakete + Stückzahl
+            Row(
+              children: [
+                Expanded(
+                  child: CompactSummaryItem(
+                    icon: Icons.inventory_2,
+                    iconName: 'inventory_2',
+                    value: '${cart.itemCount}',
+                    label: 'Pakete',
+                  ),
+                ),
+                Container(width: 1, height: 40, color: theme.border),
+                Expanded(
+                  child: CompactSummaryItem(
+                    icon: Icons.format_list_numbered,
+                    iconName: 'format_list_numbered',
+                    value: '${cart.totalQuantity}',
+                    label: 'Stk',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Volumen-Details
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.border),
+              ),
+              child: Column(
+                children: [
+                  // Brutto
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Brutto:', style: TextStyle(fontSize: 13, color: theme.textSecondary)),
+                      Text('${cart.totalVolumeBrutto.toStringAsFixed(3)} m³',
+                          style: TextStyle(fontSize: 13, color: theme.textSecondary)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // Abzug
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.remove_circle_outline, size: 14, color: theme.error),
+                          const SizedBox(width: 4),
+                          Text('Abzug:', style: TextStyle(fontSize: 13, color: theme.error)),
+                        ],
+                      ),
+                      Text('-${cart.totalAbzug.toStringAsFixed(3)} m³',
+                          style: TextStyle(fontSize: 13, color: theme.error, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Divider(color: theme.border, height: 1),
+                  const SizedBox(height: 8),
+                  // Netto
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.check_circle, size: 16, color: theme.primary),
+                          const SizedBox(width: 4),
+                          Text('Netto:', style: TextStyle(fontSize: 15, color: theme.primary, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                      Text('${cart.totalVolume.toStringAsFixed(3)} m³',
+                          style: TextStyle(fontSize: 16, color: theme.primary, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Standard-Anzeige ohne Abzug
     return Container(
       padding: const EdgeInsets.all(16),
       color: theme.surface,
@@ -718,7 +810,6 @@ class _CartScreenState extends State<CartScreen> {
       ),
     );
   }
-
   Widget _buildPackageList(ThemeProvider theme, CartProvider cart) {
     if (cart.isLoading) {
       return Center(

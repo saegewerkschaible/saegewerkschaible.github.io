@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:saegewerk/packages/fields/formatted_ip_input.dart';
 import 'package:saegewerk/packages/services/printing/zebra_printer_service.dart';
 import 'package:saegewerk/screens/settings/zebra_printer_settings_sheet.dart';
 
 import '../../core/theme/theme_provider.dart';
-
 
 class PrinterSettingsScreen extends StatefulWidget {
   const PrinterSettingsScreen({super.key});
@@ -163,6 +163,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
                   isDefault: printers[i].ipAddress == _defaultPrinterIp,
                   onSetDefault: () => _setDefault(printers[i]),
                   onSettings: () => _showSettings(printers[i]),
+                  onEdit: () => _showEditPrinterSheet(context, theme, printers[i]), // ← NEU
                   onWake: () => _wakePrinter(printers[i]),
                   onDelete: () => _deletePrinter(printers[i]),
                 ),
@@ -197,112 +198,353 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
 
   // ==================== AKTIONEN ====================
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DRUCKER HINZUFÜGEN (NEU mit IP-Widget)
+  // ═══════════════════════════════════════════════════════════════════════════
   void _showAddPrinterSheet(BuildContext context, ThemeProvider theme) {
     final nicknameCtrl = TextEditingController();
-    final ipCtrl = TextEditingController();
     final portCtrl = TextEditingController(text: '9100');
+    String ipAddress = '';
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: BoxDecoration(
-          color: theme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Zebra-Drucker hinzufügen',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: theme.textPrimary,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.65,
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [
+                    BoxShadow(color: theme.divider, spreadRadius: 1, blurRadius: 3),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.add_circle, color: theme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Zebra-Drucker hinzufügen',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      icon: Icon(Icons.close, color: theme.textSecondary),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
 
-            _buildTextField(
-              controller: nicknameCtrl,
-              label: 'Name',
-              hint: 'z.B. Produktion',
-              icon: Icons.label,
-              theme: theme,
-            ),
-            const SizedBox(height: 16),
-
-            _buildTextField(
-              controller: ipCtrl,
-              label: 'IP-Adresse',
-              hint: '192.168.1.100',
-              icon: Icons.wifi,
-              theme: theme,
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 16),
-
-            _buildTextField(
-              controller: portCtrl,
-              label: 'Port',
-              hint: '9100',
-              icon: Icons.settings_ethernet,
-              theme: theme,
-              keyboardType: TextInputType.number,
-            ),
-
-            const Spacer(),
-
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: BorderSide(color: theme.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name
+                      _buildTextField(
+                        controller: nicknameCtrl,
+                        label: 'Name *',
+                        hint: 'z.B. Produktion',
+                        icon: Icons.label,
+                        theme: theme,
                       ),
-                    ),
-                    child: Text('Abbrechen', style: TextStyle(color: theme.textSecondary)),
+                      const SizedBox(height: 20),
+
+                      // IP-Adresse (NEU)
+                      IPAddressInput(
+                        value: ipAddress,
+                        label: 'IP-Adresse *',
+                        hint: '192.168.178.xxx',
+                        onChanged: (value) {
+                          setModalState(() => ipAddress = value);
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Port
+                      _buildTextField(
+                        controller: portCtrl,
+                        label: 'Port',
+                        hint: '9100',
+                        icon: Icons.settings_ethernet,
+                        theme: theme,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Standard: 9100',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.textSecondary.withOpacity(0.7),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (nicknameCtrl.text.isEmpty || ipCtrl.text.isEmpty) {
-                        _showSnackbar('Bitte Name und IP eingeben', theme.error);
-                        return;
-                      }
+              ),
 
-                      await _service.addPrinter(
-                        nickname: nicknameCtrl.text,
-                        ipAddress: ipCtrl.text,
-                        port: int.tryParse(portCtrl.text) ?? 9100,
-                      );
-
-                      if (ctx.mounted) Navigator.pop(ctx);
-                      _showSnackbar('Drucker hinzugefügt', theme.primary);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+              // Buttons
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: theme.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text('Abbrechen', style: TextStyle(color: theme.textSecondary)),
                       ),
                     ),
-                    child: const Text('Hinzufügen'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (nicknameCtrl.text.isEmpty || ipAddress.isEmpty) {
+                            _showSnackbar('Bitte Name und IP eingeben', theme.error);
+                            return;
+                          }
+
+                          await _service.addPrinter(
+                            nickname: nicknameCtrl.text,
+                            ipAddress: ipAddress,
+                            port: int.tryParse(portCtrl.text) ?? 9100,
+                          );
+
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _showSnackbar('Drucker hinzugefügt', theme.primary);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Hinzufügen'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DRUCKER BEARBEITEN (NEU)
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _showEditPrinterSheet(BuildContext context, ThemeProvider theme, ZebraPrinter printer) {
+    final nicknameCtrl = TextEditingController(text: printer.nickname);
+    String ipAddress = printer.ipAddress;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          height: MediaQuery.of(context).size.height * 0.65,
+          decoration: BoxDecoration(
+            color: theme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  boxShadow: [
+                    BoxShadow(color: theme.divider, spreadRadius: 1, blurRadius: 3),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: theme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(Icons.edit, color: theme.primary),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Drucker bearbeiten',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textPrimary,
+                            ),
+                          ),
+                          Text(
+                            printer.nickname,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: theme.textSecondary),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Name
+                      _buildTextField(
+                        controller: nicknameCtrl,
+                        label: 'Name *',
+                        hint: 'z.B. Produktion',
+                        icon: Icons.label,
+                        theme: theme,
+                      ),
+                      const SizedBox(height: 20),
+
+                      // IP-Adresse
+                      IPAddressInput(
+                        value: ipAddress,
+                        label: 'IP-Adresse *',
+                        hint: '192.168.yyy.xxx',
+                        onChanged: (value) {
+                          setModalState(() => ipAddress = value);
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Info Box
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.primary.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: theme.primary.withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, color: theme.primary, size: 20),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'Model: ${printer.model}\nPort: ${printer.port}',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.textSecondary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
-            ),
-          ],
+              ),
+
+              // Buttons
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: BorderSide(color: theme.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: Text('Abbrechen', style: TextStyle(color: theme.textSecondary)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (nicknameCtrl.text.isEmpty || ipAddress.isEmpty) {
+                            _showSnackbar('Bitte Name und IP eingeben', theme.error);
+                            return;
+                          }
+
+                          await _service.updatePrinter(printer.id, {
+                            'nickname': nicknameCtrl.text,
+                            'ipAddress': ipAddress,
+                            'updatedAt': FieldValue.serverTimestamp(),
+                            'updatedBy': FirebaseAuth.instance.currentUser?.email ?? 'unknown',
+                          });
+
+                          if (ctx.mounted) Navigator.pop(ctx);
+                          _showSnackbar('Drucker aktualisiert', theme.primary);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: theme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Speichern'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -424,13 +666,14 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   }
 }
 
-// ==================== DRUCKER CARD ====================
+// ==================== DRUCKER CARD (AKTUALISIERT) ====================
 
 class _PrinterCard extends StatefulWidget {
   final ZebraPrinter printer;
   final bool isDefault;
   final VoidCallback onSetDefault;
   final VoidCallback onSettings;
+  final VoidCallback onEdit; // ← NEU
   final VoidCallback onWake;
   final VoidCallback onDelete;
 
@@ -439,6 +682,7 @@ class _PrinterCard extends StatefulWidget {
     required this.isDefault,
     required this.onSetDefault,
     required this.onSettings,
+    required this.onEdit, // ← NEU
     required this.onWake,
     required this.onDelete,
   });
@@ -518,7 +762,7 @@ class _PrinterCardState extends State<_PrinterCard> {
                                 color: theme.primary,
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Text(
+                              child: const Text(
                                 'Standard',
                                 style: TextStyle(
                                   fontSize: 10,
@@ -548,13 +792,25 @@ class _PrinterCardState extends State<_PrinterCard> {
                   color: theme.surface,
                   onSelected: (value) {
                     switch (value) {
-                      case 'wake': widget.onWake(); break;
-                      case 'settings': widget.onSettings(); break;
-                      case 'default': widget.onSetDefault(); break;
-                      case 'delete': widget.onDelete(); break;
+                      case 'edit':
+                        widget.onEdit();
+                        break; // ← NEU
+                      case 'wake':
+                        widget.onWake();
+                        break;
+                      case 'settings':
+                        widget.onSettings();
+                        break;
+                      case 'default':
+                        widget.onSetDefault();
+                        break;
+                      case 'delete':
+                        widget.onDelete();
+                        break;
                     }
                   },
                   itemBuilder: (_) => [
+                    _buildMenuItem('edit', Icons.edit, 'Bearbeiten', theme.textPrimary, theme), // ← NEU
                     _buildMenuItem('wake', Icons.power_settings_new, 'Aufwecken', theme.primary, theme),
                     _buildMenuItem('settings', Icons.settings, 'Einstellungen', theme.textPrimary, theme),
                     if (!widget.isDefault)

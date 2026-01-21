@@ -653,17 +653,36 @@ class _PackageCard extends StatelessWidget {
     return InkWell(
       onTap: () => _showPackageDetail(context),
       child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(color: stateColor, width: 4),
-          ),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
           children: [
-            // Barcode + Zustand
+            // Zustand-Streifen vertikal
+            Container(
+              width: 24,
+              height: 44,
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: stateColor,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Center(
+                child: RotatedBox(
+                  quarterTurns: 3,
+                  child: Text(
+                    zustand.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Barcode + Externe Nr
             Expanded(
-              flex: 3,
+              flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -674,18 +693,14 @@ class _PackageCard extends StatelessWidget {
                       color: theme.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: stateColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
+                  if (package['nrExt'] != null && package['nrExt'].toString().isNotEmpty)
+                    Text(
+                      package['nrExt'].toString(),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.textSecondary,
+                      ),
                     ),
-                    child: Text(
-                      zustand,
-                      style: TextStyle(fontSize: 11, color: stateColor),
-                    ),
-                  ),
                 ],
               ),
             ),
