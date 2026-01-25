@@ -5,17 +5,16 @@ import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 import 'package:saegewerk/customer_management/models/customer.dart';
 import 'package:saegewerk/customer_management/services/customer_service.dart';
+import 'package:saegewerk/customer_management/widgets/customer_logo_section.dart';
 import 'package:saegewerk/services/icon_helper.dart';
 
-
 import 'customer_form_bottom_sheet.dart';
-
 import 'customer_color_picker.dart';
 import 'customer_contacts_section.dart';
 import 'customer_detail_section.dart';
 import '../dialogs/delete_customer_dialog.dart';
 
-class CustomerDetailsView extends StatelessWidget {
+class CustomerDetailsView extends StatefulWidget {
   final String customerId;
   final int userGroup;
   final VoidCallback onBack;
@@ -30,20 +29,33 @@ class CustomerDetailsView extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  State<CustomerDetailsView> createState() => _CustomerDetailsViewState();
+}
+
+class _CustomerDetailsViewState extends State<CustomerDetailsView> {
+  final CustomerService _customerService = CustomerService();
+  Customer? _lastCustomer;
+
+  @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
-    final customerService = CustomerService();
 
     return StreamBuilder<Customer?>(
-      stream: customerService.getCustomerStream(customerId),
+      stream: _customerService.getCustomerStream(widget.customerId),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data == null) {
+        // Aktualisiere Cache nur wenn neue gültige Daten kommen
+        if (snapshot.hasData && snapshot.data != null) {
+          _lastCustomer = snapshot.data;
+        }
+
+        // Zeige Loading nur wenn noch NIE Daten da waren
+        if (_lastCustomer == null) {
           return Center(
             child: CircularProgressIndicator(color: theme.primary),
           );
         }
 
-        final customer = snapshot.data!;
+        final customer = _lastCustomer!;
 
         return Container(
           decoration: BoxDecoration(
@@ -63,20 +75,23 @@ class CustomerDetailsView extends StatelessWidget {
                     children: [
                       // Farbauswahl
                       CustomerColorPicker(
-                        customerId: customerId,
+                        customerId: widget.customerId,
                         customer: customer,
                       ),
-
                       const SizedBox(height: 24),
-
-                      // // Alias-Sektion
-                      // _buildAliasSection(theme, customer),
-                      //
-                      // const SizedBox(height: 24),
+                      CustomerLogoSection(
+                        customerId: widget.customerId,
+                        customer: customer,
+                      ),
+                      const SizedBox(height: 24),
 
                       // Adresse
                       _buildAddressSection(theme, customer),
-
+                      // NEU: Lieferadresse (falls abweichend)
+                      if (customer.hasDeliveryAddress) ...[
+                        const SizedBox(height: 24),
+                        _buildDeliveryAddressSection(theme, customer),
+                      ],
                       // Kontakt
                       if (customer.phone != null ||
                           customer.email != null ||
@@ -105,7 +120,7 @@ class CustomerDetailsView extends StatelessWidget {
                       const SizedBox(height: 16),
 
                       // Ansprechpartner
-                      CustomerContactsSection(customerId: customerId),
+                      CustomerContactsSection(customerId: widget.customerId),
                     ],
                   ),
                 ),
@@ -128,7 +143,7 @@ class CustomerDetailsView extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (isMobile)
+          if (widget.isMobile)
             Padding(
               padding: const EdgeInsets.only(right: 12),
               child: IconButton(
@@ -137,7 +152,7 @@ class CustomerDetailsView extends StatelessWidget {
                   defaultIcon: Icons.arrow_back,
                   color: theme.textSecondary,
                 ),
-                onPressed: onBack,
+                onPressed: widget.onBack,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
               ),
@@ -172,12 +187,12 @@ class CustomerDetailsView extends StatelessWidget {
                 ),
                 onPressed: () => CustomerFormBottomSheet.show(
                   context,
-                  customerId: customerId,
+                  customerId: widget.customerId,
                   customer: customer,
                 ),
                 tooltip: 'Bearbeiten',
               ),
-              if (userGroup >= 10)
+              if (widget.userGroup >= 10)
                 IconButton(
                   icon: getAdaptiveIcon(
                     iconName: 'delete',
@@ -188,7 +203,7 @@ class CustomerDetailsView extends StatelessWidget {
                   onPressed: () => DeleteCustomerDialog.show(
                     context,
                     customer: customer,
-                    onDeleted: onBack,
+                    onDeleted: widget.onBack,
                   ),
                   tooltip: 'Löschen',
                 ),
@@ -279,10 +294,85 @@ class CustomerDetailsView extends StatelessWidget {
       ],
     );
   }
+  Widget _buildDeliveryAddressSection(dynamic theme, Customer customer) {
+    return CustomerDetailSection(
+      title: 'Lieferadresse',
+      icon: 'local_shipping',
+      children: [
+        // Straße
+        if (customer.fullDeliveryStreet != null)
+          _buildDetailRow(theme, 'Straße', customer.fullDeliveryStreet!),
 
+        // Zusatzzeilen (Hinterhaus, 3. OG, etc.)
+        for (final line in customer.deliveryAdditionalLines)
+          if (line.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      'Zusatz:',
+                      style: TextStyle(
+                        color: theme.textSecondary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      line,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: theme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+        // Ort
+        if (customer.deliveryCityWithZip != null)
+          _buildDetailRow(theme, 'Ort', customer.deliveryCityWithZip!),
+
+        // Land
+        if (customer.deliveryCountry != null)
+          _buildDetailRow(theme, 'Land', customer.deliveryCountry!),
+
+        // Info-Hinweis
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: theme.info.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: theme.info.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 16, color: theme.info),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Diese Adresse wird auf Lieferscheinen verwendet.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: theme.info,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
   Widget _buildAddressSection(dynamic theme, Customer customer) {
     return CustomerDetailSection(
-      title: 'Adresse',
+      title: 'Rechnungsadresse',
       icon: 'location_on',
       children: [
         if (customer.fullStreet != null)
@@ -342,6 +432,7 @@ class CustomerDetailsView extends StatelessWidget {
       ],
     );
   }
+
   Widget _buildEmailSettingsSection(dynamic theme, Customer customer) {
     if (customer.email == null || customer.email!.isEmpty) {
       return const SizedBox.shrink();

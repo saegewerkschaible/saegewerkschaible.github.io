@@ -8,6 +8,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 
 import 'cart_provider.dart';
 
@@ -50,7 +51,7 @@ class DeliveryNoteService {
         'customerData': customer,
         'totalVolumeBrutto': totalVolumeBrutto,
         'totalAbzug': totalAbzug,
-        'totalVolume': totalVolumeNetto,  // Netto als Hauptwert
+        'totalVolume': totalVolumeNetto,
         'totalQuantity': items.fold<int>(0, (sum, item) => sum + item.stueckzahl),
         'itemCount': items.length,
         'items': items.map((item) => item.toMap()).toList(),
@@ -141,6 +142,21 @@ class DeliveryNoteService {
     await batch.commit();
   }
 
+  /// Lädt ein Bild von einer URL und konvertiert es für PDF
+  static Future<pw.MemoryImage?> _loadImageFromUrl(String? url) async {
+    if (url == null || url.isEmpty) return null;
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        return pw.MemoryImage(response.bodyBytes);
+      }
+    } catch (e) {
+      // Fehler beim Laden ignorieren
+    }
+    return null;
+  }
+
   /// Generiert das PDF für den Lieferschein
   static Future<Uint8List> generatePDF({
     required List<CartItem> items,
@@ -149,11 +165,18 @@ class DeliveryNoteService {
   }) async {
     final pdf = pw.Document();
 
+    // Eigenes Firmenlogo laden
     pw.MemoryImage? logo;
     try {
       final logoData = await rootBundle.load('assets/images/logo.png');
       logo = pw.MemoryImage(logoData.buffer.asUint8List());
     } catch (_) {}
+
+    // Kundenlogo laden (falls vorhanden)
+    pw.MemoryImage? customerLogo;
+    if (customer != null && customer['logoColorUrl'] != null) {
+      customerLogo = await _loadImageFromUrl(customer['logoColorUrl']);
+    }
 
     // Prüfe ob Abzüge vorhanden sind
     final hasAbzug = items.any((item) => item.hasAbzug);
@@ -167,7 +190,7 @@ class DeliveryNoteService {
             children: [
               _buildPdfHeader(number, logo),
               pw.SizedBox(height: 24),
-              _buildPdfCustomerSection(customer),
+              _buildPdfCustomerSection(customer, customerLogo),
               pw.SizedBox(height: 24),
               _buildPdfTable(items, hasAbzug),
               pw.SizedBox(height: 24),
@@ -207,14 +230,7 @@ class DeliveryNoteService {
         'telefon': '07420-1332',
         'email': 'info@saegewerk-schaible.de',
       },
-      'empfaenger': {
-        'name': customer?['name'] ?? '',
-        'strasse': customer?['street'] ?? '',
-        'hausnummer': customer?['houseNumber'] ?? '',
-        'plz': customer?['zipCode'] ?? '',
-        'ort': customer?['city'] ?? '',
-        'email': customer?['email'] ?? '',
-      },
+      'empfaenger': _buildRecipientJson(customer),
       'positionen': items.asMap().entries.map((entry) {
         final item = entry.value;
         return {
@@ -244,7 +260,42 @@ class DeliveryNoteService {
       },
     };
   }
+  static Map<String, dynamic> _buildRecipientJson(Map<String, dynamic>? customer) {
+    if (customer == null) {
+      return {'name': '', 'strasse': '', 'hausnummer': '', 'plz': '', 'ort': '', 'email': ''};
+    }
 
+    final hasDeliveryAddress = customer['hasDeliveryAddress'] == true;
+
+    return {
+      'name': customer['name'] ?? '',
+      // Lieferadresse wenn vorhanden
+      'strasse': hasDeliveryAddress
+          ? (customer['deliveryStreet'] ?? '')
+          : (customer['street'] ?? ''),
+      'hausnummer': hasDeliveryAddress
+          ? (customer['deliveryHouseNumber'] ?? '')
+          : (customer['houseNumber'] ?? ''),
+      'zusatzzeilen': hasDeliveryAddress
+          ? (customer['deliveryAdditionalLines'] ?? [])
+          : [],
+      'plz': hasDeliveryAddress
+          ? (customer['deliveryZipCode'] ?? '')
+          : (customer['zipCode'] ?? ''),
+      'ort': hasDeliveryAddress
+          ? (customer['deliveryCity'] ?? '')
+          : (customer['city'] ?? ''),
+      'email': customer['email'] ?? '',
+      'istLieferadresse': hasDeliveryAddress,
+      // Rechnungsadresse separat (falls später benötigt)
+      'rechnungsadresse': {
+        'strasse': customer['street'] ?? '',
+        'hausnummer': customer['houseNumber'] ?? '',
+        'plz': customer['zipCode'] ?? '',
+        'ort': customer['city'] ?? '',
+      },
+    };
+  }
   static Future<String> _uploadJSON(Map<String, dynamic> jsonData, String number) async {
     final now = DateTime.now();
     final ref = _storage
@@ -293,10 +344,30 @@ class DeliveryNoteService {
     );
   }
 
-  static pw.Widget _buildPdfCustomerSection(Map<String, dynamic>? customer) {
+  static pw.Widget _buildPdfCustomerSection(Map<String, dynamic>? customer, pw.MemoryImage? customerLogo) {
     if (customer == null) {
-      return pw.Text('', style: pw.TextStyle(fontWeight: pw.FontWeight.bold));
+      return pw.SizedBox();
     }
+
+    // NEU: Prüfe ob Lieferadresse vorhanden
+    final hasDeliveryAddress = customer['hasDeliveryAddress'] == true;
+
+    // Verwende Lieferadresse wenn vorhanden, sonst Hauptadresse
+    final street = hasDeliveryAddress
+        ? customer['deliveryStreet']
+        : customer['street'];
+    final houseNumber = hasDeliveryAddress
+        ? customer['deliveryHouseNumber']
+        : customer['houseNumber'];
+    final zipCode = hasDeliveryAddress
+        ? customer['deliveryZipCode']
+        : customer['zipCode'];
+    final city = hasDeliveryAddress
+        ? customer['deliveryCity']
+        : customer['city'];
+    final additionalLines = hasDeliveryAddress
+        ? (customer['deliveryAdditionalLines'] as List<dynamic>? ?? [])
+        : <dynamic>[];
 
     return pw.Container(
       padding: const pw.EdgeInsets.all(16),
@@ -305,54 +376,89 @@ class DeliveryNoteService {
         borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
         color: PdfColors.grey50,
       ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
         children: [
-          pw.Text(
-            customer['name'] ?? '',
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+          // Kundenlogo links
+          if (customerLogo != null) ...[
+            pw.Container(
+              width: 70,
+              height: 50,
+              child: pw.Image(customerLogo, fit: pw.BoxFit.contain),
+            ),
+            pw.SizedBox(width: 16),
+            pw.Container(
+              width: 1,
+              height: 50,
+              color: PdfColors.blueGrey200,
+            ),
+            pw.SizedBox(width: 16),
+          ],
+
+          // Kundenadresse (Lieferadresse wenn vorhanden)
+          pw.Expanded(
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  customer['name'] ?? '',
+                  style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+                ),
+                if (street != null)
+                  pw.Text('$street ${houseNumber ?? ''}'),
+                // NEU: Zusatzzeilen (Hinterhaus, 3. OG, etc.)
+                ...additionalLines.map((line) => pw.Text(line.toString())),
+                if (zipCode != null || city != null)
+                  pw.Text('${zipCode ?? ''} ${city ?? ''}'.trim()),
+                // NEU: Hinweis wenn Lieferadresse
+                if (hasDeliveryAddress)
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.only(top: 4),
+                    child: pw.Text(
+                      '(Lieferadresse)',
+                      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          if (customer['street'] != null)
-            pw.Text('${customer['street']} ${customer['houseNumber'] ?? ''}'),
-          if (customer['zipCode'] != null || customer['city'] != null)
-            pw.Text('${customer['zipCode'] ?? ''} ${customer['city'] ?? ''}'.trim()),
         ],
       ),
     );
   }
-
   static pw.Widget _buildPdfTable(List<CartItem> items, bool hasAbzug) {
-    // Spaltenbreiten anpassen je nachdem ob Abzug vorhanden
     final columnWidths = hasAbzug
         ? {
-      0: const pw.FlexColumnWidth(1.2), // Barcode
-      1: const pw.FlexColumnWidth(1.2), // Holzart
-      2: const pw.FlexColumnWidth(0.8), // H
-      3: const pw.FlexColumnWidth(0.8), // B
-      4: const pw.FlexColumnWidth(0.8), // L
-      5: const pw.FlexColumnWidth(0.6), // Stk
-      6: const pw.FlexColumnWidth(1),   // Brutto
-      7: const pw.FlexColumnWidth(1.1), // Abzug (mit Details)
-      8: const pw.FlexColumnWidth(1),   // Netto
+      0: const pw.FlexColumnWidth(1.0),
+      1: const pw.FlexColumnWidth(0.8),
+      2: const pw.FlexColumnWidth(1.8),
+      3: const pw.FlexColumnWidth(0.5),
+      4: const pw.FlexColumnWidth(0.5),
+      5: const pw.FlexColumnWidth(0.5),
+      6: const pw.FlexColumnWidth(0.5),
+      7: const pw.FlexColumnWidth(0.8),
+      8: const pw.FlexColumnWidth(0.9),
+      9: const pw.FlexColumnWidth(0.8),
     }
         : {
-      0: const pw.FlexColumnWidth(1.5), // Barcode
-      1: const pw.FlexColumnWidth(1.5), // Holzart
-      2: const pw.FlexColumnWidth(1),   // H
-      3: const pw.FlexColumnWidth(1),   // B
-      4: const pw.FlexColumnWidth(1),   // L
-      5: const pw.FlexColumnWidth(0.8), // Stk
-      6: const pw.FlexColumnWidth(1.2), // m³
+      0: const pw.FlexColumnWidth(1.2),
+      1: const pw.FlexColumnWidth(0.9),
+      2: const pw.FlexColumnWidth(2.0),
+      3: const pw.FlexColumnWidth(0.5),
+      4: const pw.FlexColumnWidth(0.5),
+      5: const pw.FlexColumnWidth(0.5),
+      6: const pw.FlexColumnWidth(0.5),
+      7: const pw.FlexColumnWidth(1.0),
     };
 
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.blueGrey200, width: 0.5),
       columnWidths: columnWidths,
       children: [
-        // Header
         pw.TableRow(
           decoration: const pw.BoxDecoration(color: PdfColors.blueGrey50),
           children: [
+            _tableHeader('Ext.Nr'),
             _tableHeader('Paket'),
             _tableHeader('Holzart'),
             _tableHeader('H'),
@@ -367,25 +473,34 @@ class DeliveryNoteService {
               _tableHeader('m³'),
           ],
         ),
-        // Datenzeilen
         ...items.map((item) => pw.TableRow(
           children: [
+            _tableCell(item.nrExt ?? '-'),
             _tableCell(item.barcode),
             _tableCell(item.holzart),
-            _tableCell(item.hoehe.toStringAsFixed(0)),
-            _tableCell(item.breite.toStringAsFixed(0)),
-            _tableCell(item.laenge.toStringAsFixed(2)),
-            _tableCell(item.stueckzahl.toString()),
+            _tableCellRight(item.hoehe.toStringAsFixed(0)),
+            _tableCellRight(item.breite.toStringAsFixed(0)),
+            _tableCellRight(item.laenge.toStringAsFixed(2)),
+            _tableCellRight(item.stueckzahl.toString()),
             if (hasAbzug) ...[
-              _tableCell(item.menge.toStringAsFixed(3)),
-              // Abzug-Zelle mit Details
+              _tableCellRight(item.menge.toStringAsFixed(3)),
               _tableAbzugCell(item),
-              _tableCell(item.nettoVolumen.toStringAsFixed(3)),
+              _tableCellRight(item.nettoVolumen.toStringAsFixed(3)),
             ] else
-              _tableCell(item.menge.toStringAsFixed(3)),
+              _tableCellRight(item.menge.toStringAsFixed(3)),
           ],
         )),
       ],
+    );
+  }
+
+  static pw.Widget _tableCellRight(String text) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Align(
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(text, style: const pw.TextStyle(fontSize: 9)),
+      ),
     );
   }
 
@@ -402,13 +517,11 @@ class DeliveryNoteService {
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // Volumen
           pw.Text(
             '-${item.abzugVolumen.toStringAsFixed(3)}',
             style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 2),
-          // Details: Stk × Länge
           pw.Text(
             '${item.abzugStk} Stk × ${item.abzugLaenge}m',
             style: const pw.TextStyle(fontSize: 7, color: PdfColors.grey700),

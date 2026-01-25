@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 
-import '../../../services/icon_helper.dart';
+import '../../services/icon_helper.dart';
 import 'info_chips.dart';
 
 class PackageCard extends StatelessWidget {

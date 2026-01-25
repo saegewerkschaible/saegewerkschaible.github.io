@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 
-import '../../../services/icon_helper.dart';
+import '../../services/icon_helper.dart';
 import '../models/layout_type.dart';
 import '../delivery_note_detail_screen.dart';
 

@@ -8,7 +8,6 @@ import 'package:saegewerk/customer_management/services/customer_service.dart';
 import 'package:saegewerk/services/icon_helper.dart';
 
 import 'widgets/customer_form_bottom_sheet.dart';
-
 import 'widgets/customer_list_tile.dart';
 import 'widgets/customer_details_view.dart';
 
@@ -31,9 +30,24 @@ class CustomerManagementScreenState extends State<CustomerManagementScreen> {
   final CustomerService _customerService = CustomerService();
 
   @override
+  void initState() {
+    super.initState();
+    debugPrint('🟢 [CustomerManagementScreen] initState');
+  }
+
+  @override
+  void dispose() {
+    debugPrint('🔴 [CustomerManagementScreen] dispose');
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
     final isDesktop = MediaQuery.of(context).size.width > 800;
+
+    debugPrint('🔵 [CustomerManagementScreen] build - selectedCustomerId: $selectedCustomerId');
 
     return Scaffold(
       backgroundColor: theme.background,
@@ -56,7 +70,6 @@ class CustomerManagementScreenState extends State<CustomerManagementScreen> {
           ],
         ),
         actions: [
-
           IconButton(
             icon: getAdaptiveIcon(
               iconName: 'person_add',
@@ -205,21 +218,73 @@ class CustomerManagementScreenState extends State<CustomerManagementScreen> {
   }
 
   Widget _buildCustomerList(dynamic theme) {
+    debugPrint('🔵 [_buildCustomerList] Building customer list widget');
+
     return StreamBuilder<List<Customer>>(
       stream: _customerService.getCustomersStream(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+        debugPrint('📊 [CustomerList StreamBuilder] ────────────────────────────');
+        debugPrint('📊 [CustomerList] connectionState: ${snapshot.connectionState}');
+        debugPrint('📊 [CustomerList] hasData: ${snapshot.hasData}');
+        debugPrint('📊 [CustomerList] hasError: ${snapshot.hasError}');
+        debugPrint('📊 [CustomerList] error: ${snapshot.error}');
+        debugPrint('📊 [CustomerList] data length: ${snapshot.data?.length ?? "NULL"}');
+
+        if (snapshot.hasError) {
+          debugPrint('❌ [CustomerList] ERROR: ${snapshot.error}');
           return Center(
-            child: CircularProgressIndicator(color: theme.primary),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: theme.error),
+                const SizedBox(height: 16),
+                Text(
+                  'Fehler beim Laden',
+                  style: TextStyle(color: theme.error, fontSize: 16),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${snapshot.error}',
+                  style: TextStyle(color: theme.textSecondary, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          debugPrint('⏳ [CustomerList] No data yet, showing loading indicator');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(color: theme.primary),
+                const SizedBox(height: 16),
+                Text(
+                  'Lade Kunden...',
+                  style: TextStyle(color: theme.textSecondary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'ConnectionState: ${snapshot.connectionState}',
+                  style: TextStyle(color: theme.textSecondary, fontSize: 10),
+                ),
+              ],
+            ),
           );
         }
 
         final allCustomers = snapshot.data!;
+        debugPrint('✅ [CustomerList] Got ${allCustomers.length} customers');
+
         final customers = allCustomers.where((Customer customer) {
           final name = customer.name?.toLowerCase() ?? '';
           final city = customer.city?.toLowerCase() ?? '';
           return name.contains(searchQuery) || city.contains(searchQuery);
         }).toList();
+
+        debugPrint('✅ [CustomerList] After filter: ${customers.length} customers');
 
         if (customers.isEmpty) {
           return Center(
@@ -257,6 +322,7 @@ class CustomerManagementScreenState extends State<CustomerManagementScreen> {
               customer: customer,
               isSelected: isSelected,
               onTap: () {
+                debugPrint('👆 [CustomerList] Tapped customer: ${customer.id} - ${customer.name}');
                 setState(() {
                   selectedCustomerId = customer.id;
                 });
@@ -295,11 +361,5 @@ class CustomerManagementScreenState extends State<CustomerManagementScreen> {
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
   }
 }

@@ -262,6 +262,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
         'Barcode': data['barcode']?.toString() ?? '',
         'Nr': data['barcode']?.toString() ?? '',
         'Kunde': data['kunde']?.toString() ?? '',
+        'kundeId': data['kundeId']?.toString() ?? '',
         'Auftragsnr': data['auftragsnr']?.toString() ?? '',
         'Holzart': data['holzart']?.toString() ?? '',
         'H': data['hoehe']?.toString() ?? '',
@@ -425,7 +426,107 @@ class _ScannerScreenState extends State<ScannerScreen> {
       );
     }
   }
+  void _showExternalNumberInputDialog() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    String currentNumber = '';
 
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            backgroundColor: theme.surface,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                double dialogWidth = math.min(400.0, constraints.maxWidth * 0.9);
+                double buttonSize = math.min((dialogWidth - 48) / 4, 80.0);
+                double fontSize = buttonSize * 0.4;
+
+                return Container(
+                  width: dialogWidth,
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.tag, color: theme.primary),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Externe Nummer',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textPrimary,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            icon: Icon(Icons.close, color: theme.textSecondary),
+                            onPressed: () => Navigator.pop(ctx),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: theme.background,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: theme.border),
+                        ),
+                        child: Text(
+                          currentNumber.isEmpty ? '0' : currentNumber,
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textPrimary,
+                          ),
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ..._buildNumpad(
+                        theme: theme,
+                        buttonSize: buttonSize,
+                        fontSize: fontSize,
+                        currentNumber: currentNumber,
+                        onNumberChanged: (n) => setState(() => currentNumber = n),
+                        onConfirm: () {
+                          if (currentNumber.isNotEmpty) {
+                            Navigator.pop(ctx);
+                            _fetchPackageByExternalNumber(currentNumber);
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _fetchPackageByExternalNumber(String externalNumber) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('packages')
+        .where('nrExt', isEqualTo: externalNumber)
+        .limit(1)
+        .get();
+
+    if (snapshot.docs.isNotEmpty) {
+      _showPackageSheet(snapshot.docs.first.data());
+    } else {
+      if (mounted) {
+        showAppSnackbar(context, 'Paket mit Ext. Nr. $externalNumber nicht gefunden');
+      }
+    }
+  }
   void _showBarcodeInputDialog() {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     String currentNumber = '';
@@ -689,6 +790,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             icon: Icons.keyboard,
                             label: 'Manuell',
                             onTap: _showBarcodeInputDialog,
+                            fixedSize: _getButtonSize(screenWidth),
+                          ),
+                          _buildMenuButton(
+                            theme: theme,
+                            icon: Icons.tag,
+                            label: 'Ext. Nr.',
+                            onTap: _showExternalNumberInputDialog,
                             fixedSize: _getButtonSize(screenWidth),
                           ),
                           _buildMenuButton(

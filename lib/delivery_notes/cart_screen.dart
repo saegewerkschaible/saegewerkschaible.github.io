@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:saegewerk/screens/delivery_notes/dialogs/email_settings_dialog.dart';
-import 'package:saegewerk/screens/delivery_notes/widgets/summary_card.dart';
-
-import '../../core/theme/theme_provider.dart';
-import '../../constants.dart';
-import '../scanner/barcode_scanner_page.dart';
+import 'package:saegewerk/constants.dart';
+import 'package:saegewerk/core/theme/theme_provider.dart';
+import 'package:saegewerk/delivery_notes/dialogs/email_settings_dialog.dart';
+import 'package:saegewerk/delivery_notes/widgets/summary_card.dart';
+import 'package:saegewerk/screens/scanner/barcode_scanner_page.dart';
 
 import 'services/cart_provider.dart';
 import 'services/delivery_note_service.dart';
@@ -559,18 +558,41 @@ class _CartScreenState extends State<CartScreen> {
                     color: cart.selectedCustomer != null ? theme.success : theme.error,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    cart.selectedCustomer != null
-                        ? (cart.selectedCustomer!['name'] as String).substring(
-                      0,
-                      min(20, (cart.selectedCustomer!['name'] as String).length),
-                    )
-                        : 'Kunde wählen',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: cart.selectedCustomer != null ? theme.success : theme.error,
-                    ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        cart.selectedCustomer != null
+                            ? (cart.selectedCustomer!['name'] as String).substring(
+                          0,
+                          min(28, (cart.selectedCustomer!['name'] as String).length),
+                        )
+                            : 'Kunde wählen',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: cart.selectedCustomer != null ? theme.success : theme.error,
+                        ),
+                      ),
+                      // NEU: Lieferadresse anzeigen wenn vorhanden
+                      if (cart.selectedCustomer != null &&
+                          cart.selectedCustomer!['hasDeliveryAddress'] == true)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.local_shipping, size: 10, color: theme.info),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${cart.selectedCustomer!['deliveryZipCode'] ?? ''} ${cart.selectedCustomer!['deliveryCity'] ?? ''}'.trim(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: theme.info,
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
                   const SizedBox(width: 4),
                   Icon(

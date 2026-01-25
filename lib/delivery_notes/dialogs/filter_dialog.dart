@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 import 'package:saegewerk/services/filter/filter_widget.dart';
+import 'package:saegewerk/services/icon_helper.dart';
 
-import '../../../services/icon_helper.dart';
+
 
 
 class FilterDialog {

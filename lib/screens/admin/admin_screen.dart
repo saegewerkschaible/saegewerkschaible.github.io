@@ -355,7 +355,9 @@ class _DimensionsSettingsTab extends StatelessWidget {
             final unit = dim['unit'] as String;
             final icon = dim['icon'] as IconData;
 
-            final values = List<double>.from(data[key] ?? []);
+            final values = (data[key] as List<dynamic>? ?? [])
+                .map((e) => (e as num).toDouble())
+                .toList();
             values.sort();
 
             return _buildDimensionCard(

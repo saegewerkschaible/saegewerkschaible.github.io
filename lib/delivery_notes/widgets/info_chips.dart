@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 
 
-import '../../../services/icon_helper.dart';
+import '../../services/icon_helper.dart';
 
 /// Info-Chip für Lieferschein-Karten (Tablet/Desktop)
 class DeliveryInfoChip extends StatelessWidget {

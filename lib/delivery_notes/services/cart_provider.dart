@@ -4,7 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../../constants.dart';
+import '../../constants.dart';
 
 /// Ein Artikel im Warenkorb
 class CartItem {

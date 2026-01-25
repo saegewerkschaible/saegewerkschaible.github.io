@@ -7,7 +7,7 @@ import 'package:saegewerk/core/theme/theme_provider.dart';
 import 'package:saegewerk/services/filter/filter_chip_utils.dart';
 import 'package:saegewerk/services/filter/filter_settings.dart';
 
-import '../../../services/icon_helper.dart';
+import '../../services/icon_helper.dart';
 
 import '../models/layout_type.dart';
 

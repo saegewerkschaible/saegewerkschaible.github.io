@@ -1,14 +1,15 @@
-// lib/screens/delivery_notes/dialogs/delete_delivery_note_dialog.dart
+// lib/screens/delivery_notes/dialogs/delete_package_dialog.dart
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/theme/theme_provider.dart';
+import '../../core/theme/theme_provider.dart';
 
-class DeleteDeliveryNoteDialog {
+class DeletePackageDialog {
   static Future<bool> show(
       BuildContext context, {
+        required String packageId,
         required Map<String, dynamic> deliveryNote,
       }) async {
     final theme = context.read<ThemeProvider>();
@@ -19,12 +20,12 @@ class DeleteDeliveryNoteDialog {
         backgroundColor: theme.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Text(
-          'Lieferschein löschen',
+          'Paket entfernen',
           style: TextStyle(color: theme.textPrimary),
         ),
         content: Text(
-          'Willst du den gesamten Lieferschein wirklich löschen? '
-              'Alle Pakete werden wieder als verfügbar markiert.',
+          'Willst du das Paket wirklich aus dem Lieferschein entfernen? '
+              'Das Paket wird wieder als verfügbar markiert.',
           style: TextStyle(color: theme.textSecondary),
         ),
         actions: [
@@ -41,7 +42,7 @@ class DeleteDeliveryNoteDialog {
               foregroundColor: Colors.white,
             ),
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Löschen'),
+            child: const Text('Entfernen'),
           ),
         ],
       ),
@@ -50,37 +51,46 @@ class DeleteDeliveryNoteDialog {
     if (shouldDelete != true) return false;
 
     try {
-      final batch = FirebaseFirestore.instance.batch();
-      final items = deliveryNote['items'] as List<dynamic>;
+      // Paket zurücksetzen
+      await FirebaseFirestore.instance
+          .collection('packages')
+          .doc(packageId)
+          .update({
+        'status': 'im Lager',
+        'verkauftAm': null,
+        'lieferscheinNr': null,
+      });
 
-      // Pakete zurücksetzen
-      for (var item in items) {
-        final packageRef = FirebaseFirestore.instance
-            .collection('packages')
-            .doc(item['packageId'].toString());
+      // Paket aus der items Liste des Lieferscheins entfernen
+      final updatedItems = (deliveryNote['items'] as List<dynamic>)
+          .where((item) => item['packageId'].toString() != packageId)
+          .toList();
 
-        batch.update(packageRef, {
-          'status': 'im Lager',
-          'verkauftAm': null,
-          'lieferscheinNr': null,
-        });
-      }
+      // Neue Gesamtmengen berechnen
+      final newTotalQuantity = updatedItems.fold<int>(
+        0,
+            (sum, item) => sum + ((item['stueckzahl'] as num?)?.toInt() ?? 0),
+      );
+      final newTotalVolume = updatedItems.fold<double>(
+        0.0,
+            (sum, item) => sum + ((item['menge'] as num?)?.toDouble() ?? 0.0),
+      );
 
-      // Lieferschein löschen
-      final deliveryNoteRef = FirebaseFirestore.instance
+      // Lieferschein aktualisieren
+      await FirebaseFirestore.instance
           .collection('delivery_notes')
-          .doc(deliveryNote['id']);
-
-      batch.delete(deliveryNoteRef);
-
-      // Alle Änderungen ausführen
-      await batch.commit();
+          .doc(deliveryNote['id'])
+          .update({
+        'items': updatedItems,
+        'totalQuantity': newTotalQuantity,
+        'totalVolume': newTotalVolume,
+        'itemCount': updatedItems.length,
+      });
 
       if (context.mounted) {
-        Navigator.of(context).pop();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Lieferschein wurde erfolgreich gelöscht'),
+            content: const Text('Paket wurde erfolgreich entfernt'),
             backgroundColor: theme.success,
           ),
         );

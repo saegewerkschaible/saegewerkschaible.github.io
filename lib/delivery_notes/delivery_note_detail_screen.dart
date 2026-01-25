@@ -7,11 +7,12 @@ import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:saegewerk/services/icon_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
 
 import 'services/file_helper.dart';
-import '../../services/icon_helper.dart';
+
 import 'widgets/package_card.dart';
 import 'dialogs/delete_package_dialog.dart';
 import 'dialogs/delete_delivery_note_dialog.dart';

@@ -25,24 +25,34 @@ class DimensionsService {
       final doc = await _db.collection('settings').doc('dimensions').get();
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>?;
-        final values = List<double>.from(data?[key] ?? []);
+        final rawValues = data?[key] as List<dynamic>? ?? [];
+        // Konvertiere zu double (funktioniert für int UND double)
+        final values = rawValues.map((e) => (e as num).toDouble()).toList();
         values.sort();
         return values;
       }
     } catch (e) {
-      // Bei Fehler leere Liste
+      print('Fehler beim Laden von $key: $e');
     }
     return [];
   }
 
-  /// Stream für Live-Updates
   Stream<Map<String, List<double>>> watchDimensions() {
     return _db.collection('settings').doc('dimensions').snapshots().map((doc) {
       final data = doc.data() ?? {};
+
+      List<double> parseList(dynamic raw) {
+        if (raw == null) return [];
+        return (raw as List<dynamic>)
+            .map((e) => (e as num).toDouble())
+            .toList()
+          ..sort();
+      }
+
       return {
-        'height': List<double>.from(data['height'] ?? [])..sort(),
-        'width': List<double>.from(data['width'] ?? [])..sort(),
-        'length': List<double>.from(data['length'] ?? [])..sort(),
+        'height': parseList(data['height']),
+        'width': parseList(data['width']),
+        'length': parseList(data['length']),
       };
     });
   }

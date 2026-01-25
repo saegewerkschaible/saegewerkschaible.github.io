@@ -170,14 +170,39 @@ class FilterSettings extends ChangeNotifier {
 
   Future<void> _loadDimensions() async {
     try {
-      // Dimensionen aus Paketen aggregieren oder aus eigener Collection
-      // Für jetzt: Standard-Dimensionen
-      dimensions = ['27/120', '27/160', '32/120', '32/160', '52/120', '52/160', 'andere'];
+      final doc = await _firestore.collection('settings').doc('dimensions').get();
+      if (doc.exists) {
+        final data = doc.data()!;
+
+        // Höhen und Breiten kombinieren zu "H/B" Format
+        final heights = List<num>.from(data['height'] ?? []);
+        final widths = List<num>.from(data['width'] ?? []);
+
+        final Set<String> dimensionSet = {};
+        for (var h in heights) {
+          for (var w in widths) {
+            dimensionSet.add('${h.toInt()}/${w.toInt()}');
+          }
+        }
+
+        dimensions = dimensionSet.toList()..sort((a, b) {
+          // Sortiere nach Höhe, dann Breite
+          final aParts = a.split('/').map(int.parse).toList();
+          final bParts = b.split('/').map(int.parse).toList();
+          final cmp = aParts[0].compareTo(bParts[0]);
+          return cmp != 0 ? cmp : aParts[1].compareTo(bParts[1]);
+        });
+
+        if (!dimensions.contains('andere')) {
+          dimensions.add('andere');
+        }
+      }
     } catch (e) {
       debugPrint('Fehler beim Laden der Dimensionen: $e');
+      // Fallback
+      dimensions = ['27/120', '27/160', '32/120', '32/160', '52/120', '52/160', 'andere'];
     }
   }
-
   Future<void> _loadStates() async {
     try {
       // Zustände sind in Sägewerk fix definiert

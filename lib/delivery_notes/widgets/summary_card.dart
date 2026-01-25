@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
-import 'package:saegewerk/screens/delivery_notes/models/layout_type.dart';
+
 import 'package:saegewerk/services/icon_helper.dart';
 
 // Summary Card für verschiedene Layouts

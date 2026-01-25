@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:saegewerk/customer_management/customer_management_screen.dart';
+import 'package:saegewerk/screens/admin/paketzettel_design_screen.dart';
 import 'package:saegewerk/services/auth_service.dart';
 
 import '../../core/theme/theme_provider.dart';
@@ -140,6 +141,20 @@ class _AppDrawerState extends State<AppDrawer> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => const AdminScreen()),
+                        );
+                      },
+                    ),
+                    _buildActionItemWithSubtitle(
+                      context: context,
+                      theme: theme,
+                      icon: Icons.receipt_long,
+                      label: 'Design Paketzettel',
+                      subtitle: 'Schriftgrößen, Logos anpassen',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const PaketzettelDesignScreen()),
                         );
                       },
                     ),

@@ -3,9 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:saegewerk/delivery_notes/services/cart_provider.dart';
 
-import '../../../core/theme/theme_provider.dart';
-import '../services/cart_provider.dart';
+import '../../core/theme/theme_provider.dart';
 
 class CustomerSelectionDialog extends StatefulWidget {
   const CustomerSelectionDialog({super.key});
@@ -234,6 +234,7 @@ class _CustomerSelectionDialogState extends State<CustomerSelectionDialog> {
     final name = data['name']?.toString() ?? '';
     final city = data['city']?.toString() ?? '';
     final zipCode = data['zipCode']?.toString() ?? '';
+    final logoUrl = data['logoColorUrl']?.toString();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -246,24 +247,37 @@ class _CustomerSelectionDialogState extends State<CustomerSelectionDialog> {
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
-          cart.setCustomer(data);
+          cart.setCustomer({
+            ...data,
+            'id': doc.id,
+          });
           Navigator.pop(context);
         },
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              // Avatar
-              CircleAvatar(
-                backgroundColor: theme.primary.withOpacity(0.1),
-                child: Text(
-                  name.isNotEmpty ? name[0].toUpperCase() : '?',
-                  style: TextStyle(
-                    color: theme.primary,
-                    fontWeight: FontWeight.bold,
+              // Avatar - mit Logo wenn vorhanden
+              logoUrl != null
+                  ? Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: theme.border),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Image.network(
+                    logoUrl,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => _buildLetterAvatar(theme, name),
                   ),
                 ),
-              ),
+              )
+                  : _buildLetterAvatar(theme, name),
               const SizedBox(width: 16),
 
               // Name + Adresse
@@ -291,9 +305,45 @@ class _CustomerSelectionDialogState extends State<CustomerSelectionDialog> {
                 ),
               ),
 
-              Icon(Icons.chevron_right, color: theme.textSecondary),
+              // NEU: Lieferadresse-Badge
+              if (data['hasDeliveryAddress'] == true)
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.info.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: theme.info.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.local_shipping, size: 12, color: theme.info),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Abw. Lieferadresse',
+                        style: TextStyle(fontSize: 10, color: theme.info, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+
+        Icon(Icons.chevron_right, color: theme.textSecondary),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLetterAvatar(ThemeProvider theme, String name) {
+    return CircleAvatar(
+      backgroundColor: theme.primary.withOpacity(0.1),
+      child: Text(
+        name.isNotEmpty ? name[0].toUpperCase() : '?',
+        style: TextStyle(
+          color: theme.primary,
+          fontWeight: FontWeight.bold,
         ),
       ),
     );

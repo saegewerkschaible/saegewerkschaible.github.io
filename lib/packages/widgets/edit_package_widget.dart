@@ -65,7 +65,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   late TextEditingController statusController;
   late TextEditingController abzugStkController;
   late TextEditingController abzugLaengeController;
-
+  String? _kundeId;  // NEU: Kunden-ID für Logo-Abfrage
   // Expansion State
   List<bool> _isExpanded = [true, true, true, true, true];
 
@@ -95,8 +95,9 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   void initState() {
     super.initState();
     _initControllers();
-    _loadPinSettings();
+
     if (widget.isNewPackage) {
+      _loadPinSettings();
       _loadNextBarcode();
     }
   }
@@ -121,6 +122,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
           }
           if (_pinKunde && data['kundeValue'] != null) {
             kundeController.text = data['kundeValue'];
+            print("yuhe");
           }
           if (_pinLagerort && data['lagerortValue'] != null) {
             lagerortController.text = data['lagerortValue'];
@@ -245,6 +247,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
       'Barcode': barcodeController.text,
       'Nr': barcodeController.text,
       'Kunde': kundeController.text,
+      'kundeId': _kundeId,
       'Auftragsnr': auftragsnrController.text,
       'Holzart': holzartController.text,
       'H': hController.text,
@@ -293,6 +296,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
     );
     holzartController = TextEditingController(text: data?['holzart']?.toString() ?? '');
     kundeController = TextEditingController(text: data?['kunde']?.toString() ?? '');
+    print("kC:$kundeController");
     hController = TextEditingController(text: data?['hoehe']?.toString() ?? '');
     bController = TextEditingController(text: data?['breite']?.toString() ?? '');
     lController = TextEditingController(text: data?['laenge']?.toString() ?? '');
@@ -303,6 +307,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
     bemerkungController = TextEditingController(text: data?['bemerkung']?.toString() ?? '');
     saegerController = TextEditingController(text: data?['saeger']?.toString() ?? '');
     statusController = TextEditingController(text: data?['status']?.toString() ?? PackageStatus.imLager);
+    _kundeId = data?['kundeId']?.toString();  // NEU
   }
 
   Future<void> _loadNextBarcode() async {
@@ -378,6 +383,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
   }
 
   Future<bool> _saveChanges() async {
+    print("kI$_kundeId");
     if (!_validateRequiredFields()) return false;
 
     try {
@@ -387,6 +393,7 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
         'datum': datumController.text,
         'holzart': holzartController.text,
         'kunde': kundeController.text,
+        'kundeId': _kundeId,
         'hoehe': double.tryParse(hController.text) ?? 0,
         'breite': double.tryParse(bController.text) ?? 0,
         'laenge': double.tryParse(lController.text) ?? 0,
@@ -437,7 +444,10 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
 
       // Nur leeren wenn NICHT gepinnt
       if (!_pinHolzart) holzartController.clear();
-      if (!_pinKunde) kundeController.clear();
+      if (!_pinKunde) {
+        kundeController.clear();
+        _kundeId = null;  // ← NEU HINZUFÜGEN
+      }
       if (!_pinLagerort) lagerortController.clear();
       // NEU
       if (!_pinStaerke) hController.clear();
@@ -509,7 +519,12 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
                     pinKunde: widget.isNewPackage ? _pinKunde : false,          // GEÄNDERT
                     onTogglePin: widget.isNewPackage ? _togglePin : null,       // GEÄNDERT
                     onPinnedValueChanged: widget.isNewPackage ? _updatePinnedValue : null,  // GEÄNDERT
-
+                    onKundeIdChanged: (id) {
+                      setState(() {
+                        _kundeId = id;
+                      });
+                      debugPrint('🔵 _kundeId gesetzt auf: $id');
+                    },
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -686,7 +701,12 @@ class _EditPackageWidgetState extends State<EditPackageWidget> {
               pinKunde: widget.isNewPackage ? _pinKunde : false,          // GEÄNDERT
               onTogglePin: widget.isNewPackage ? _togglePin : null,       // GEÄNDERT
               onPinnedValueChanged: widget.isNewPackage ? _updatePinnedValue : null,  // GEÄNDERT
-
+              onKundeIdChanged: (id) {
+                setState(() {
+                  _kundeId = id;
+                });
+                debugPrint('🔵 _kundeId gesetzt auf: $id');
+              },
             ),
           ),
           const SizedBox(height: 8),

@@ -6,8 +6,6 @@ import 'package:saegewerk/core/theme/theme_provider.dart';
 import 'package:saegewerk/customer_management/models/customer.dart';
 import 'package:saegewerk/services/icon_helper.dart';
 
-
-
 class CustomerListTile extends StatelessWidget {
   final Customer customer;
   final bool isSelected;
@@ -39,16 +37,7 @@ class CustomerListTile extends StatelessWidget {
         ),
       ),
       child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: customer.color,
-          child: Text(
-            customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
+        leading: _buildAvatar(theme),
         title: Text(
           customer.name,
           style: TextStyle(
@@ -95,6 +84,59 @@ class CustomerListTile extends StatelessWidget {
           ],
         ),
         onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildAvatar(ThemeProvider theme) {
+    // Wenn Logo vorhanden, zeige Logo
+    if (customer.logoColorUrl != null) {
+      return Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: theme.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Image.network(
+            customer.logoColorUrl!,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => _buildLetterAvatar(),
+            loadingBuilder: (_, child, progress) {
+              if (progress == null) return child;
+              return Center(
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.primary,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    // Fallback: Buchstabe
+    return _buildLetterAvatar();
+  }
+
+  Widget _buildLetterAvatar() {
+    return CircleAvatar(
+      backgroundColor: customer.color,
+      child: Text(
+        customer.name.isNotEmpty ? customer.name[0].toUpperCase() : '?',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }

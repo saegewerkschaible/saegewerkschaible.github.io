@@ -103,7 +103,15 @@ class ActiveFiltersBar extends StatelessWidget {
       ),
     );
   }
-
+  String _statusLabel(String status) {
+    switch (status) {
+      case 'im_lager': return 'Im Lager';
+      case 'verkauft': return 'Verkauft';
+      case 'verarbeitet': return 'Verarbeitet';
+      case 'ausgebucht': return 'Ausgebucht';
+      default: return status;
+    }
+  }
   List<Widget> _buildChips(BuildContext context, dynamic colors) {
     List<Widget> chips = [];
     final DateFormat formatter = DateFormat('dd.MM.yyyy');
@@ -194,7 +202,7 @@ class ActiveFiltersBar extends StatelessWidget {
     // Status
     for (var status in settings.activeId23) {
       chips.add(_FilterChip(
-        label: status,
+        label: _statusLabel(status),
         icon: Icons.inventory,
         iconName: 'inventory',
         onDelete: () {

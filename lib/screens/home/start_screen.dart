@@ -7,17 +7,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:saegewerk/customer_management/customer_management_screen.dart';
+import 'package:saegewerk/delivery_notes/cart_screen.dart' show CartScreen;
+import 'package:saegewerk/delivery_notes/delivery_note_screen.dart';
 import 'package:saegewerk/screens/admin/admin_screen.dart';
 import 'package:saegewerk/screens/admin/user_management_screen.dart';
-import 'package:saegewerk/screens/delivery_notes/cart_screen.dart';
-import 'package:saegewerk/screens/delivery_notes/delivery_note_screen.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../packages/widgets/app_drawer.dart';
 import '../../packages/widgets/edit_package_widget.dart';
 import '../scanner/scanner_screen.dart';
 import '../statistic_screen.dart';
-import '../packages/packages_screen.dart';
+import '../../packages/packages_screen.dart';
 
 import '../../core/theme/theme_provider.dart';
 import '../../services/auth_service.dart';

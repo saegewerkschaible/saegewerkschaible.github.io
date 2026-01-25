@@ -14,6 +14,17 @@ class Customer {
   final String? city;
   final String? country;
 
+  // NEU: Lieferadresse
+  final bool hasDeliveryAddress;
+  final String? deliveryStreet;
+  final String? deliveryHouseNumber;
+  final String? deliveryZipCode;
+  final String? deliveryCity;
+  final String? deliveryCountry;
+  final List<String> deliveryAdditionalLines;
+
+
+
   // Kontaktdaten
   final String? phone;
   final String? email;
@@ -46,6 +57,13 @@ class Customer {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  final String? logoColorUrl;
+  final String? logoBwUrl;
+  final DateTime? logoUpdatedAt;
+
+
+
+
   Customer({
     required this.id,
     required this.name,
@@ -54,16 +72,22 @@ class Customer {
     this.zipCode,
     this.city,
     this.country,
+    this.hasDeliveryAddress = false,
+    this.deliveryStreet,
+    this.deliveryHouseNumber,
+    this.deliveryZipCode,
+    this.deliveryCity,
+    this.deliveryCountry,
+    this.deliveryAdditionalLines = const [],
     this.phone,
     this.email,
     this.website,
     this.notes,
     this.alias,
     this.useAliasOnLabels = false,
-    this.emailReceivesDeliveryNote = true,  // NEU
-    this.emailSendPdf = true,                // NEU
+    this.emailReceivesDeliveryNote = true,
+    this.emailSendPdf = true,
     this.emailSendJson = false,
-
     this.placeId,
     this.latitude,
     this.longitude,
@@ -76,6 +100,9 @@ class Customer {
     required this.color,
     this.createdAt,
     this.updatedAt,
+    this.logoColorUrl,
+    this.logoBwUrl,
+    this.logoUpdatedAt,
   });
 
   /// Factory: Aus Firestore Document erstellen
@@ -117,6 +144,15 @@ class Customer {
       zipCode: map['zipCode'],
       city: map['city'],
       country: map['country'],
+      hasDeliveryAddress: map['hasDeliveryAddress'] ?? false,
+      deliveryStreet: map['deliveryStreet'],
+      deliveryHouseNumber: map['deliveryHouseNumber'],
+      deliveryZipCode: map['deliveryZipCode'],
+      deliveryCity: map['deliveryCity'],
+      deliveryCountry: map['deliveryCountry'],
+      deliveryAdditionalLines: map['deliveryAdditionalLines'] != null
+          ? List<String>.from(map['deliveryAdditionalLines'])
+          : [],
       phone: map['phone'],
       email: map['email'],
       website: map['website'],
@@ -132,25 +168,25 @@ class Customer {
       formattedAddress: map['formattedAddress'],
       googlePhone: map['googlePhone'],
       googleWebsite: map['googleWebsite'],
-      lastGeocoded: map['lastGeocoded'] != null
-          ? (map['lastGeocoded'] is Timestamp
-          ? (map['lastGeocoded'] as Timestamp).toDate()
-          : DateTime.tryParse(map['lastGeocoded']))
-          : null,
+      lastGeocoded: _parseDateTime(map['lastGeocoded']),
       isGeocoded: map['isGeocoded'] ?? false,
       googleBusinessStatus: map['googleBusinessStatus'],
       color: customerColor,
-      createdAt: map['createdAt'] != null
-          ? (map['createdAt'] is Timestamp
-          ? (map['createdAt'] as Timestamp).toDate()
-          : DateTime.tryParse(map['createdAt']))
-          : null,
-      updatedAt: map['updatedAt'] != null
-          ? (map['updatedAt'] is Timestamp
-          ? (map['updatedAt'] as Timestamp).toDate()
-          : DateTime.tryParse(map['updatedAt']))
-          : null,
+      createdAt: _parseDateTime(map['createdAt']),
+      updatedAt: _parseDateTime(map['updatedAt']),
+      logoColorUrl: map['logoColorUrl'],
+      logoBwUrl: map['logoBwUrl'],
+      logoUpdatedAt: _parseDateTime(map['logoUpdatedAt']),
     );
+  }
+
+  /// Hilfsmethode zum sicheren Parsen von DateTime aus Firestore
+  /// Unterstützt Timestamp, String und null
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   /// Zu Firestore Map konvertieren
@@ -162,6 +198,13 @@ class Customer {
       'zipCode': zipCode,
       'city': city,
       'country': country,
+      'hasDeliveryAddress': hasDeliveryAddress,
+      'deliveryStreet': deliveryStreet,
+      'deliveryHouseNumber': deliveryHouseNumber,
+      'deliveryZipCode': deliveryZipCode,
+      'deliveryCity': deliveryCity,
+      'deliveryCountry': deliveryCountry,
+      'deliveryAdditionalLines': deliveryAdditionalLines,
       'phone': phone,
       'email': email,
       'website': website,
@@ -182,9 +225,11 @@ class Customer {
       'lastGeocoded': lastGeocoded?.toIso8601String(),
       'isGeocoded': isGeocoded,
       'googleBusinessStatus': googleBusinessStatus,
-      'colorValue': color?.value,
+      'colorValue': color.value,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
+      'logoColorUrl': logoColorUrl,
+      'logoBwUrl': logoBwUrl,
     };
   }
 
@@ -196,6 +241,13 @@ class Customer {
     String? zipCode,
     String? city,
     String? country,
+    bool? hasDeliveryAddress,
+    String? deliveryStreet,
+    String? deliveryHouseNumber,
+    String? deliveryZipCode,
+    String? deliveryCity,
+    String? deliveryCountry,
+    List<String>? deliveryAdditionalLines,
     String? phone,
     String? email,
     String? website,
@@ -217,6 +269,9 @@ class Customer {
     Color? color,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? logoColorUrl,
+    String? logoBwUrl,
+    DateTime? logoUpdatedAt,
   }) {
     return Customer(
       id: id,
@@ -226,6 +281,13 @@ class Customer {
       zipCode: zipCode ?? this.zipCode,
       city: city ?? this.city,
       country: country ?? this.country,
+      hasDeliveryAddress: hasDeliveryAddress ?? this.hasDeliveryAddress,
+      deliveryStreet: deliveryStreet ?? this.deliveryStreet,
+      deliveryHouseNumber: deliveryHouseNumber ?? this.deliveryHouseNumber,
+      deliveryZipCode: deliveryZipCode ?? this.deliveryZipCode,
+      deliveryCity: deliveryCity ?? this.deliveryCity,
+      deliveryCountry: deliveryCountry ?? this.deliveryCountry,
+      deliveryAdditionalLines: deliveryAdditionalLines ?? this.deliveryAdditionalLines,
       phone: phone ?? this.phone,
       email: email ?? this.email,
       website: website ?? this.website,
@@ -235,7 +297,6 @@ class Customer {
       emailReceivesDeliveryNote: emailReceivesDeliveryNote ?? this.emailReceivesDeliveryNote,
       emailSendPdf: emailSendPdf ?? this.emailSendPdf,
       emailSendJson: emailSendJson ?? this.emailSendJson,
-
       placeId: placeId ?? this.placeId,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
@@ -248,9 +309,43 @@ class Customer {
       color: color ?? this.color,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      logoColorUrl: logoColorUrl ?? this.logoColorUrl,
+      logoBwUrl: logoBwUrl ?? this.logoBwUrl,
+      logoUpdatedAt: logoUpdatedAt ?? this.logoUpdatedAt,
     );
   }
 
+// Lieferadresse Hilfsmethoden
+  String? get fullDeliveryStreet {
+    if (deliveryStreet == null) return null;
+    if (deliveryHouseNumber == null) return deliveryStreet;
+    return '$deliveryStreet $deliveryHouseNumber';
+  }
+
+  String? get deliveryCityWithZip {
+    if (deliveryCity == null) return null;
+    if (deliveryZipCode == null) return deliveryCity;
+    return '$deliveryZipCode $deliveryCity';
+  }
+
+  String? get fullDeliveryAddress {
+    if (!hasDeliveryAddress) return null;
+    final parts = <String>[];
+    if (fullDeliveryStreet != null) parts.add(fullDeliveryStreet!);
+    for (final line in deliveryAdditionalLines) {
+      if (line.isNotEmpty) parts.add(line);
+    }
+    if (deliveryCityWithZip != null) parts.add(deliveryCityWithZip!);
+    if (deliveryCountry != null) parts.add(deliveryCountry!);
+    return parts.isEmpty ? null : parts.join(', ');
+  }
+
+  String? get effectiveDeliveryAddress {
+    if (hasDeliveryAddress && fullDeliveryAddress != null) {
+      return fullDeliveryAddress;
+    }
+    return fullAddress;
+  }
   /// Hat der Kunde eine Email und ist für Lieferschein-Emails aktiviert?
   bool get canReceiveDeliveryNoteEmail =>
       email != null && email!.isNotEmpty && emailReceivesDeliveryNote;

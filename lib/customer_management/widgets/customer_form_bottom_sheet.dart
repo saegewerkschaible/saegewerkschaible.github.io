@@ -86,6 +86,15 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
   late final TextEditingController aliasController;
   late final TextEditingController latitudeController;
   late final TextEditingController longitudeController;
+  // NEU: Lieferadresse Controller
+  late final TextEditingController deliveryStreetController;
+  late final TextEditingController deliveryHouseNumberController;
+  late final TextEditingController deliveryZipCodeController;
+  late final TextEditingController deliveryCityController;
+  late final TextEditingController deliveryCountryController;
+  List<TextEditingController> _additionalLineControllers = [];
+  bool _hasDeliveryAddress = false;
+
   bool _isLoading = false;
   bool _useAliasOnLabels = false;
   bool _emailReceivesDeliveryNote = true;
@@ -139,6 +148,20 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
       _selectedFormattedAddress = customer.formattedAddress;
       _googlePhone = customer.googlePhone;
       _googleWebsite = customer.googleWebsite;
+
+      // NEU: Lieferadresse
+      _hasDeliveryAddress = customer.hasDeliveryAddress;
+      deliveryStreetController = TextEditingController(text: customer.deliveryStreet ?? '');
+      deliveryHouseNumberController = TextEditingController(text: customer.deliveryHouseNumber ?? '');
+      deliveryZipCodeController = TextEditingController(text: customer.deliveryZipCode ?? '');
+      deliveryCityController = TextEditingController(text: customer.deliveryCity ?? '');
+      deliveryCountryController = TextEditingController(text: customer.deliveryCountry ?? 'Deutschland');
+
+// Zusatzzeilen laden
+      for (final line in customer.deliveryAdditionalLines) {
+        _additionalLineControllers.add(TextEditingController(text: line));
+      }
+
     } else {
       nameController = TextEditingController();
       streetController = TextEditingController();
@@ -153,6 +176,12 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
       aliasController = TextEditingController();
       latitudeController = TextEditingController();
       longitudeController = TextEditingController();
+      // NEU: Lieferadresse
+      deliveryStreetController = TextEditingController();
+      deliveryHouseNumberController = TextEditingController();
+      deliveryZipCodeController = TextEditingController();
+      deliveryCityController = TextEditingController();
+      deliveryCountryController = TextEditingController(text: 'Deutschland');
     }
   }
 
@@ -171,9 +200,41 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
     aliasController.dispose();
     latitudeController.dispose();
     longitudeController.dispose();
+    // NEU: Lieferadresse
+    deliveryStreetController.dispose();
+    deliveryHouseNumberController.dispose();
+    deliveryZipCodeController.dispose();
+    deliveryCityController.dispose();
+    deliveryCountryController.dispose();
+    for (final c in _additionalLineControllers) {
+      c.dispose();
+    }
     super.dispose();
   }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NEU: Zusatzzeilen Verwaltung
+// ═══════════════════════════════════════════════════════════════════════════
+
+  void _addAdditionalLine() {
+    setState(() {
+      _additionalLineControllers.add(TextEditingController());
+    });
+  }
+
+  void _removeAdditionalLine(int index) {
+    setState(() {
+      _additionalLineControllers[index].dispose();
+      _additionalLineControllers.removeAt(index);
+    });
+  }
+
+  List<String> _getAdditionalLines() {
+    return _additionalLineControllers
+        .map((c) => c.text.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+  }
 
   Widget _buildEmailSettingsSection(ThemeProvider theme) {
     // Nur anzeigen wenn Email-Feld nicht leer
@@ -351,6 +412,14 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
           zipCode: zipCodeController.text.trim().isEmpty ? null : zipCodeController.text.trim(),
           city: cityController.text.trim().isEmpty ? null : cityController.text.trim(),
           country: countryController.text.trim().isEmpty ? null : countryController.text.trim(),
+// NEU: Lieferadresse
+          hasDeliveryAddress: _hasDeliveryAddress,
+          deliveryStreet: deliveryStreetController.text.trim().isEmpty ? null : deliveryStreetController.text.trim(),
+          deliveryHouseNumber: deliveryHouseNumberController.text.trim().isEmpty ? null : deliveryHouseNumberController.text.trim(),
+          deliveryZipCode: deliveryZipCodeController.text.trim().isEmpty ? null : deliveryZipCodeController.text.trim(),
+          deliveryCity: deliveryCityController.text.trim().isEmpty ? null : deliveryCityController.text.trim(),
+          deliveryCountry: deliveryCountryController.text.trim().isEmpty ? null : deliveryCountryController.text.trim(),
+          deliveryAdditionalLines: _getAdditionalLines(),
           phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
           email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
           website: websiteController.text.trim().isEmpty ? null : websiteController.text.trim(),
@@ -371,6 +440,7 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
           color: theme.info, // Theme Info Farbe statt Hardcoded Blue
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
+
         );
 
         await _customerService.createCustomer(newCustomer);
@@ -414,9 +484,19 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
           street: streetController.text.trim().isEmpty ? null : streetController.text.trim(),
           houseNumber: houseNumberController.text.trim().isEmpty ? null : houseNumberController.text.trim(),
           zipCode: zipCodeController.text.trim().isEmpty ? null : zipCodeController.text.trim(),
+          // SUCHE DIESE STELLE:
           city: cityController.text.trim().isEmpty ? null : cityController.text.trim(),
           country: countryController.text.trim().isEmpty ? null : countryController.text.trim(),
           phone: phoneController.text.trim().isEmpty ? null : phoneController.text.trim(),
+          // NEU: Lieferadresse
+          hasDeliveryAddress: _hasDeliveryAddress,
+          deliveryStreet: deliveryStreetController.text.trim().isEmpty ? null : deliveryStreetController.text.trim(),
+          deliveryHouseNumber: deliveryHouseNumberController.text.trim().isEmpty ? null : deliveryHouseNumberController.text.trim(),
+          deliveryZipCode: deliveryZipCodeController.text.trim().isEmpty ? null : deliveryZipCodeController.text.trim(),
+          deliveryCity: deliveryCityController.text.trim().isEmpty ? null : deliveryCityController.text.trim(),
+          deliveryCountry: deliveryCountryController.text.trim().isEmpty ? null : deliveryCountryController.text.trim(),
+          deliveryAdditionalLines: _getAdditionalLines(),
+
           email: emailController.text.trim().isEmpty ? null : emailController.text.trim(),
           website: websiteController.text.trim().isEmpty ? null : websiteController.text.trim(),
           notes: notesController.text.trim().isEmpty ? null : notesController.text.trim(),
@@ -682,7 +762,7 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
                           const SizedBox(height: 24),
 
                           // Adresse
-                          _buildSectionTitle('Adresse', Icons.location_on, 'location_on', theme),
+                          _buildSectionTitle('Rechnungsadresse', Icons.location_on, 'location_on', theme),
                           const SizedBox(height: 16),
 
                           Row(
@@ -770,7 +850,9 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
                           ),
 
                           const SizedBox(height: 24),
+                          _buildDeliveryAddressSection(theme),
 
+                          const SizedBox(height: 24),
                           // Kontakt
                           _buildSectionTitle('Kontakt', Icons.contact_phone, 'contact_phone', theme),
                           const SizedBox(height: 16),
@@ -970,7 +1052,168 @@ class _CustomerFormBottomSheetState extends State<CustomerFormBottomSheet> {
       ),
     );
   }
+// ═══════════════════════════════════════════════════════════════════════════
+// NEU: Lieferadresse Section
+// ═══════════════════════════════════════════════════════════════════════════
 
+  Widget _buildDeliveryAddressSection(ThemeProvider theme) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Toggle für abweichende Lieferadresse
+        Container(
+          decoration: BoxDecoration(
+            color: theme.background,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.border),
+          ),
+          child: CheckboxListTile(
+            value: _hasDeliveryAddress,
+            onChanged: (value) {
+              setState(() => _hasDeliveryAddress = value ?? false);
+            },
+            title: Text(
+              'Abweichende Lieferadresse',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: theme.textPrimary,
+              ),
+            ),
+            subtitle: Text(
+              'Lieferadresse unterscheidet sich von Rechnungsadresse',
+              style: TextStyle(fontSize: 12, color: theme.textSecondary),
+            ),
+            activeColor: theme.primary,
+            checkColor: theme.textOnPrimary,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+
+        // Lieferadresse Felder (nur wenn aktiviert)
+        if (_hasDeliveryAddress) ...[
+          const SizedBox(height: 16),
+          _buildSectionTitle('Lieferadresse', Icons.local_shipping, 'local_shipping', theme),
+          const SizedBox(height: 16),
+
+          // Straße + Hausnummer
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _buildTextField(
+                  controller: deliveryStreetController,
+                  label: 'Straße',
+                  textInputAction: TextInputAction.next,
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildTextField(
+                  controller: deliveryHouseNumberController,
+                  label: 'Nr.',
+                  textInputAction: TextInputAction.next,
+                  theme: theme,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Zusatzzeilen (dynamisch)
+          ..._buildAdditionalLinesFields(theme),
+
+          // PLZ + Ort
+          Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: deliveryZipCodeController,
+                  label: 'PLZ',
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: _buildTextField(
+                  controller: deliveryCityController,
+                  label: 'Ort',
+                  textInputAction: TextInputAction.next,
+                  theme: theme,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Land
+          _buildTextField(
+            controller: deliveryCountryController,
+            label: 'Land',
+            textInputAction: TextInputAction.next,
+            theme: theme,
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _buildAdditionalLinesFields(ThemeProvider theme) {
+    final widgets = <Widget>[];
+
+    for (int i = 0; i < _additionalLineControllers.length; i++) {
+      widgets.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildTextField(
+                  controller: _additionalLineControllers[i],
+                  label: 'Zusatzzeile ${i + 1} (z.B. Hinterhaus, 3. OG)',
+                  textInputAction: TextInputAction.next,
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () => _removeAdditionalLine(i),
+                icon: Icon(Icons.remove_circle_outline, color: theme.error),
+                tooltip: 'Zeile entfernen',
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Button zum Hinzufügen
+    widgets.add(
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: OutlinedButton.icon(
+          onPressed: _addAdditionalLine,
+          icon: Icon(Icons.add, color: theme.primary),
+          label: Text(
+            'Zusatzzeile hinzufügen',
+            style: TextStyle(color: theme.primary),
+          ),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: theme.border),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+        ),
+      ),
+    );
+
+    return widgets;
+  }
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
