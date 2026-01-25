@@ -2,8 +2,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 // CUSTOMER LOGO SECTION
 // Zeigt und verwaltet das Kundenlogo in der Detailansicht
+// WEB-KOMPATIBEL: Verbesserte Fehlerbehandlung und Caching
 // ═══════════════════════════════════════════════════════════════════════════
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:saegewerk/core/theme/theme_provider.dart';
@@ -24,6 +26,11 @@ class CustomerLogoSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = context.watch<ThemeProvider>();
     final hasLogo = customer.logoColorUrl != null;
+
+    debugPrint('🔄 [CustomerLogoSection] build');
+    debugPrint('   hasLogo: $hasLogo');
+    debugPrint('   logoColorUrl: ${customer.logoColorUrl}');
+    debugPrint('   logoBwUrl: ${customer.logoBwUrl}');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -78,6 +85,13 @@ class CustomerLogoSection extends StatelessWidget {
   }
 
   Widget _buildLogoPreview(ThemeProvider theme) {
+    // Timestamp für Cache-Busting (& statt ? weil Firebase URL schon ?token=... hat)
+    final cacheBuster = customer.logoUpdatedAt?.millisecondsSinceEpoch.toString() ?? '';
+    final colorUrl = '${customer.logoColorUrl}${cacheBuster.isNotEmpty ? "&v=$cacheBuster" : ""}';
+    final bwUrl = customer.logoBwUrl != null
+        ? '${customer.logoBwUrl}${cacheBuster.isNotEmpty ? "&v=$cacheBuster" : ""}'
+        : null;
+
     return Column(
       children: [
         // Farb-Logo
@@ -96,33 +110,22 @@ class CustomerLogoSection extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: theme.border),
                     ),
-                    child: Image.network(
-                      customer.logoColorUrl!,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.broken_image,
-                        color: theme.textSecondary,
-                      ),
-                      loadingBuilder: (_, child, progress) {
-                        if (progress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: theme.primary,
-                          ),
-                        );
-                      },
+                    child: _buildNetworkImage(
+                      colorUrl,
+                      theme,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.description, size: 12, color: theme.textSecondary),
+                      Icon(Icons.description,
+                          size: 12, color: theme.textSecondary),
                       const SizedBox(width: 4),
                       Text(
                         'Lieferschein',
-                        style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                        style: TextStyle(
+                            fontSize: 11, color: theme.textSecondary),
                       ),
                     ],
                   ),
@@ -133,7 +136,7 @@ class CustomerLogoSection extends StatelessWidget {
             const SizedBox(width: 12),
 
             // S/W-Version
-            if (customer.logoBwUrl != null)
+            if (bwUrl != null)
               Expanded(
                 child: Column(
                   children: [
@@ -145,33 +148,22 @@ class CustomerLogoSection extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: theme.border),
                       ),
-                      child: Image.network(
-                        customer.logoBwUrl!,
-                        fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Icon(
-                          Icons.broken_image,
-                          color: theme.textSecondary,
-                        ),
-                        loadingBuilder: (_, child, progress) {
-                          if (progress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: theme.primary,
-                            ),
-                          );
-                        },
+                      child: _buildNetworkImage(
+                        bwUrl,
+                        theme,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.local_shipping, size: 12, color: theme.textSecondary),
+                        Icon(Icons.local_shipping,
+                            size: 12, color: theme.textSecondary),
                         const SizedBox(width: 4),
                         Text(
                           'Paketzettel',
-                          style: TextStyle(fontSize: 11, color: theme.textSecondary),
+                          style: TextStyle(
+                              fontSize: 11, color: theme.textSecondary),
                         ),
                       ],
                     ),
@@ -207,59 +199,128 @@ class CustomerLogoSection extends StatelessWidget {
     );
   }
 
-  Widget _buildPlaceholder(ThemeProvider theme, BuildContext context) {
-    return InkWell(
-      onTap: () => _showUploadDialog(context),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        decoration: BoxDecoration(
-          color: theme.background,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: theme.border,
-            style: BorderStyle.solid,
-          ),
-        ),
-        child: Column(
+  /// Netzwerkbild mit verbesserter Fehlerbehandlung für Web
+  Widget _buildNetworkImage(String url, ThemeProvider theme) {
+    return Image.network(
+      url,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('❌ [CustomerLogoSection] Bild laden fehlgeschlagen: $error');
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.primary.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.add_photo_alternate,
-                size: 32,
-                color: theme.primary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Logo hochladen',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: theme.textPrimary,
-              ),
+            Icon(
+              Icons.broken_image,
+              color: theme.textSecondary,
+              size: 24,
             ),
             const SizedBox(height: 4),
             Text(
-              'PNG oder JPG, max. 5 MB',
+              'Fehler',
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 10,
                 color: theme.textSecondary,
               ),
             ),
           ],
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: theme.primary,
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                  loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          ),
+        );
+      },
+      // Cache-Control für Web
+      cacheWidth: 600, // Limitiere die gecachte Bildgröße
+    );
+  }
+
+  Widget _buildPlaceholder(ThemeProvider theme, BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _showUploadDialog(context),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 32),
+          decoration: BoxDecoration(
+            color: theme.background,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: theme.border,
+              style: BorderStyle.solid,
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.add_photo_alternate,
+                  size: 32,
+                  color: theme.primary,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Logo hochladen',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: theme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'PNG oder JPG, max. 5 MB',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.textSecondary,
+                ),
+              ),
+              if (kIsWeb) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: theme.info.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'Web-Version',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: theme.info,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
   }
 
   void _showUploadDialog(BuildContext context) {
+    debugPrint('🔄 [CustomerLogoSection] _showUploadDialog()');
     CustomerLogoUploadDialog.show(
       context,
       customerId: customerId,
