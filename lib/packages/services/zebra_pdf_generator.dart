@@ -1,6 +1,6 @@
 // lib/services/printing/zebra_pdf_generator.dart
 // ═══════════════════════════════════════════════════════════════════════════
-// AKTUALISIERT: Mit Design-Einstellungen aus Firestore
+// AKTUALISIERT: Mit Design-Einstellungen aus Firestore + Blockware-Support
 // ═══════════════════════════════════════════════════════════════════════════
 
 import 'dart:io';
@@ -91,6 +91,10 @@ class ZebraPdfGenerator {
       return null;
     }
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STANDARD-PAKETZETTEL (unverändert)
+  // ═══════════════════════════════════════════════════════════════════════════
 
   /// Generiert PDF für Standard-Paketzettel
   static Future<File> generatePackageLabel(
@@ -215,7 +219,289 @@ class ZebraPdfGenerator {
     return file;
   }
 
-  // ==================== HELPER ====================
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOCKWARE-PAKETZETTEL (NEU)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Generiert PDF für Blockware-Paketzettel
+  ///
+  /// [data] enthält die gleichen Keys wie beim Standard-Paket plus:
+  /// - 'Staerke': Stärke in mm (fix für alle Bretter)
+  /// - 'Bretter': List<Map<String, dynamic>> mit {breite, laenge} pro Brett
+  /// - 'Stueckzahl': Anzahl Bretter
+  static Future<File> generateBlockwareLabel(
+      Map<String, dynamic> data,
+      double labelWidthMm,
+      ) async {
+    final pdf = pw.Document();
+
+    // Design-Einstellungen laden
+    final settings = await _loadDesignSettings();
+
+    // Firmenlogo laden
+    final ByteData logoData = await rootBundle.load('assets/images/logo_sw.png');
+    final Uint8List logoBytes = logoData.buffer.asUint8List();
+    final companyLogo = pw.MemoryImage(logoBytes);
+
+    // Kundenlogo
+    final kundeId = data['kundeId']?.toString();
+    pw.MemoryImage? customerLogo = await _loadCustomerLogo(kundeId);
+
+    // Bretter-Daten
+    final bretter = (data['Bretter'] as List<dynamic>?)
+        ?.map((b) => b as Map<String, dynamic>)
+        .toList() ?? [];
+    final staerke = _parseDouble(data['Staerke']?.toString());
+    final stueckzahl = bretter.length;
+
+    // Volumen berechnen
+    double bruttoVolume = 0;
+    for (final brett in bretter) {
+      final breite = (brett['breite'] as num?)?.toDouble() ?? 0;
+      final laenge = (brett['laenge'] as num?)?.toDouble() ?? 0;
+      bruttoVolume += (staerke * breite * laenge) / 1000000;
+    }
+
+    // Abzug
+    final abzugStk = _parseInt(data['AbzugStk']?.toString());
+    final hasAbzug = abzugStk > 0;
+    double abzugVolume = 0;
+    double nettoVolume = bruttoVolume;
+
+    if (hasAbzug && bretter.isNotEmpty) {
+      final avgBreite = bretter
+          .map((b) => (b['breite'] as num?)?.toDouble() ?? 0)
+          .reduce((a, b) => a + b) / bretter.length;
+      final abzugL = _parseDouble(data['AbzugLaenge']?.toString());
+      abzugVolume = (staerke * avgBreite * abzugL * abzugStk) / 1000000;
+      nettoVolume = bruttoVolume - abzugVolume;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Dynamische Höhe berechnen
+    // ═══════════════════════════════════════════════════════════════
+    // Basis: Logo + Barcode + Kundeninfos + Stärke + Volumen
+    int printLength = 160;
+
+    // Brettliste: Header + Zeilen (kompakt ~3mm pro Zeile)
+    printLength += 8 + (stueckzahl * 3).clamp(0, 200);
+
+    // Abzug
+    if (hasAbzug) printLength += 24;
+
+    // Logos
+    if (customerLogo != null && settings.logoPosition == 'stacked') {
+      printLength += 16;
+    }
+
+    // Bemerkung
+    String bemerkung = data['Bemerkung']?.toString() ?? '';
+    if (bemerkung.isNotEmpty) {
+      const int charsPerLine = 40;
+      int lines = (bemerkung.length / charsPerLine).ceil();
+      printLength += 8 + (lines * 6);
+    }
+
+    String nrExt = data['Nr_ext']?.toString() ?? '';
+    if (nrExt.isNotEmpty) printLength += 8;
+
+    // Seitenformat
+    final pageFormat = PdfPageFormat(
+      labelWidthMm * PdfPageFormat.mm,
+      printLength * PdfPageFormat.mm,
+      marginLeft: 8 * PdfPageFormat.mm,
+      marginRight: 8 * PdfPageFormat.mm,
+      marginTop: 8 * PdfPageFormat.mm,
+      marginBottom: 8 * PdfPageFormat.mm,
+    );
+
+    // ═══════════════════════════════════════════════════════════════
+    // Content aufbauen
+    // ═══════════════════════════════════════════════════════════════
+    final List<pw.Widget> content = [
+      // Logo-Header
+      _buildLogoHeader(companyLogo, customerLogo, settings),
+      pw.SizedBox(height: settings.sectionSpacing),
+
+      // Barcode-Box
+      _buildBarcodeBox(data, pageFormat, settings),
+
+      // BLOCKWARE Banner
+      _buildBlockwareBanner(settings),
+
+      // Kundeninfos
+      _buildRow('Kunde', _getCustomerName(data), settings),
+      _buildRow('Auftrag', data['Auftragsnr']?.toString() ?? '-', settings),
+      _buildRow('Holzart', data['Holzart']?.toString() ?? '-', settings),
+
+      // Gesamtinfos
+      _buildRow('D [mm]', '${staerke.toStringAsFixed(0)} (fix)', settings),
+      _buildRow('Stk', '$stueckzahl', settings),
+
+      pw.SizedBox(height: settings.sectionSpacing),
+
+      // Brettliste kompakt
+      _buildBretterTable(bretter, staerke, settings),
+
+      pw.SizedBox(height: settings.sectionSpacing),
+    ];
+
+    // Volumen-Bereich
+    if (hasAbzug) {
+      content.add(_buildRow('Brutto', '${bruttoVolume.toStringAsFixed(3)} m³', settings));
+      content.add(_buildBlockwareAbzugRow(abzugStk, abzugVolume, settings));
+      content.add(_buildNettoRow(nettoVolume, settings));
+    } else {
+      content.add(_buildRow('Menge', '${bruttoVolume.toStringAsFixed(3)} m³', settings));
+    }
+
+    // Zusatzinfos
+    if (bemerkung.isNotEmpty) content.add(_buildRow('Info', bemerkung, settings));
+    if (nrExt.isNotEmpty) content.add(_buildRow('Nr. ext.', nrExt, settings));
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: pageFormat,
+        build: (_) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: content,
+        ),
+      ),
+    );
+
+    final output = await getTemporaryDirectory();
+    final file = File("${output.path}/Paketzettel_${data['Barcode']}.pdf");
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BLOCKWARE-SPEZIFISCHE HELPER
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Banner "BLOCKWARE" analog zu "LAMELLE"
+  static pw.Widget _buildBlockwareBanner(PaketzettelDesignSettings settings) {
+    return pw.Container(
+      padding: const pw.EdgeInsets.symmetric(vertical: 2),
+      decoration: pw.BoxDecoration(color: PdfColors.black),
+      child: pw.Center(
+        child: pw.Text(
+          'BLOCKWARE',
+          style: pw.TextStyle(
+            color: PdfColors.white,
+            fontSize: settings.headerFontSize,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Kompakte Brettliste als Tabelle
+  /// Layout: Spaltenweise mit Nr, Breite, Länge
+  /// Sehr klein gedruckt damit der Zettel nicht zu lang wird
+  static pw.Widget _buildBretterTable(
+      List<Map<String, dynamic>> bretter,
+      double staerke,
+      PaketzettelDesignSettings settings,
+      ) {
+    // Kleine Schriftgröße für die Brettliste
+    final smallFont = settings.labelFontSize - 1;
+
+    // Header-Zeile
+    final headerRow = pw.Container(
+      padding: const pw.EdgeInsets.symmetric(vertical: 1),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(width: 1)),
+      ),
+      child: pw.Row(
+        children: [
+          pw.SizedBox(width: 16, child: pw.Text('Nr', style: pw.TextStyle(fontSize: smallFont, fontWeight: pw.FontWeight.bold))),
+          pw.Expanded(child: pw.Text('B [mm]', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: smallFont, fontWeight: pw.FontWeight.bold))),
+          pw.Expanded(child: pw.Text('L [m]', textAlign: pw.TextAlign.center, style: pw.TextStyle(fontSize: smallFont, fontWeight: pw.FontWeight.bold))),
+        ],
+      ),
+    );
+
+    // Brett-Zeilen
+    final rows = <pw.Widget>[headerRow];
+
+    for (int i = 0; i < bretter.length; i++) {
+      final brett = bretter[i];
+      final breite = (brett['breite'] as num?)?.toDouble() ?? 0;
+      final laenge = (brett['laenge'] as num?)?.toDouble() ?? 0;
+
+      rows.add(
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 0.5),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(bottom: pw.BorderSide(width: 0.3, color: PdfColors.grey400)),
+          ),
+          child: pw.Row(
+            children: [
+              pw.SizedBox(
+                width: 16,
+                child: pw.Text(
+                  '${i + 1}',
+                  style: pw.TextStyle(fontSize: smallFont, color: PdfColors.grey600),
+                ),
+              ),
+              pw.Expanded(
+                child: pw.Text(
+                  '${breite.toStringAsFixed(0)}',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: smallFont, fontWeight: pw.FontWeight.bold),
+                ),
+              ),
+              pw.Expanded(
+                child: pw.Text(
+                  '${laenge.toString()}',
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(fontSize: smallFont),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return pw.Column(children: rows);
+  }
+
+  /// Abzug-Zeile für Blockware (ohne feste Breite)
+  static pw.Widget _buildBlockwareAbzugRow(
+      int abzugStk,
+      double abzugVolume,
+      PaketzettelDesignSettings settings,
+      ) {
+    return pw.Container(
+      decoration: pw.BoxDecoration(
+        border: pw.Border(bottom: pw.BorderSide(width: 0.5)),
+      ),
+      padding: pw.EdgeInsets.symmetric(vertical: settings.rowPadding),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        children: [
+          pw.Expanded(
+            flex: 3,
+            child: pw.Text('Abzug', style: pw.TextStyle(fontSize: settings.labelFontSize)),
+          ),
+          pw.Expanded(
+            flex: 6,
+            child: pw.Text(
+              '-$abzugStk Stk = -${abzugVolume.toStringAsFixed(3)} m³',
+              style: pw.TextStyle(fontSize: settings.labelFontSize, fontWeight: pw.FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SHARED HELPER (bestehend - unverändert)
+  // ═══════════════════════════════════════════════════════════════════════════
 
   static double _parseDouble(String? v) => double.tryParse((v ?? '').replaceAll(',', '.')) ?? 0.0;
   static int _parseInt(String? v) => int.tryParse(v ?? '') ?? 0;

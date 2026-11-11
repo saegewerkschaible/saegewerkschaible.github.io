@@ -293,21 +293,41 @@ class _DimensionInputDialogState extends State<_DimensionInputDialog> {
 
               if (isLandscape) {
                 return Container(
-                  width: dialogWidth,
+                  // Wir erzwingen eine feste Breite für das Tablet-Fenster
+                  width: math.min(800, constraints.maxWidth * 0.9),
+                  // Wir erzwingen eine feste Höhe
+                  height: 600,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     color: theme.surface,
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    // stretch sorgt dafür, dass beide Seiten die vollen 500px Höhe nutzen
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      quickSelectionWidget,
+                      // Linke Seite: Schnellauswahl (Breite fest auf 300px)
+                      SizedBox(
+                        width: 300,
+                        child: _buildQuickSelection(
+                          theme: theme,
+                          isLandscape: isLandscape,
+                          dialogWidth: 300, // Hier die feste Breite übergeben
+                        ),
+                      ),
+                      // Trennlinie
                       Container(width: 1, color: theme.border),
-                      Expanded(child: calculatorWidget),
+                      // Rechte Seite: Taschenrechner (nimmt den restlichen Platz)
+                      Expanded(
+                        child: Center(
+                          child: SingleChildScrollView(
+                            child: calculatorWidget,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 );
-              } else {
+              }else {
                 return Container(
                   width: dialogWidth,
                   decoration: BoxDecoration(
@@ -332,17 +352,16 @@ class _DimensionInputDialogState extends State<_DimensionInputDialog> {
       },
     );
   }
-
   Widget _buildQuickSelection({
     required ThemeProvider theme,
-
     required bool isLandscape,
     required double dialogWidth,
   }) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.only(top: 16.0),
+          padding: const EdgeInsets.symmetric(vertical: 16.0),
           child: Text(
             "Schnellauswahl",
             style: TextStyle(
@@ -353,82 +372,80 @@ class _DimensionInputDialogState extends State<_DimensionInputDialog> {
             textAlign: TextAlign.center,
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            width: isLandscape ? 250 : dialogWidth - 32,
-            decoration: BoxDecoration(
-              color: theme.background,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(10),
-                topRight: Radius.circular(10),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: theme.background,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.border),
               ),
-              border: Border.all(color: theme.border),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Titel
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                  decoration: BoxDecoration(
+              // Clip verhindert, dass Ecken aus dem Rahmen schauen
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  // Titel-Header (Blau)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     color: theme.primary,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(9),
-                      topRight: Radius.circular(9),
+                    child: Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textOnPrimary,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                  child: Text(
-                    widget.title,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textOnPrimary,
+                  // Das neue Grid für die Zahlen
+                  Expanded(
+                    child: GridView.builder(
+                      padding: EdgeInsets.zero,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,       // 2 Spalten
+                        childAspectRatio: 2.2,   // Macht die Buttons angenehm breit
+                        mainAxisSpacing: 0,
+                        crossAxisSpacing: 0,
+                      ),
+                      itemCount: widget.quickOptions.length,
+                      itemBuilder: (context, index) {
+                        final option = widget.quickOptions[index];
+                        bool isSelected = widget.controller.text == option;
+                        return InkWell(
+                          onTap: () => _selectQuickOption(option),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: isSelected ? theme.primary.withOpacity(0.12) : theme.surface,
+                              border: Border.all(
+                                color: theme.border.withOpacity(0.3),
+                                width: 0.5,
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              option,
+                              style: TextStyle(
+                                fontSize: 18, // Große Schrift für Tablet
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                color: isSelected ? theme.primary : theme.textPrimary,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                ),
-                // Liste
-                SizedBox(
-                  height: isLandscape ? 300 : 200,
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: widget.quickOptions.length,
-                    itemBuilder: (context, index) {
-                      bool isSelected = widget.controller.text == widget.quickOptions[index];
-                      return InkWell(
-                        onTap: () => _selectQuickOption(widget.quickOptions[index]),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                          decoration: BoxDecoration(
-                            color: isSelected ? theme.primaryLight : theme.surface,
-                            border: Border(
-                              bottom: BorderSide(color: theme.border, width: 0.5),
-                            ),
-                          ),
-                          child: Text(
-                            widget.quickOptions[index],
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              color: isSelected ? theme.primary : theme.textPrimary,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ],
     );
   }
-
   Widget _buildCalculator({
     required ThemeProvider theme,
     required double buttonSize,

@@ -105,6 +105,9 @@ class PackageService {
 
     // Paketdaten vorbereiten
     final packageData = {
+      'isBlockware': data['isBlockware'] ?? false,
+      'staerke': data['staerke'] ?? 0,
+      'bretter': data['bretter'] ?? [],  // Liste von {breite, laenge} Maps
       'barcode': barcode,
       'nr': newPackageNumber,
       'nrExt': data['nrExt'] ?? '',

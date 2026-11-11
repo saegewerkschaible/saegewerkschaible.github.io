@@ -5,6 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:saegewerk/packages/dialogs/dimension_input_dialog.dart';
 
 import '../../core/theme/theme_provider.dart';
 
@@ -335,6 +336,12 @@ class _DimensionsSettingsTab extends StatelessWidget {
     {'key': 'height', 'label': 'Stärke', 'unit': 'mm', 'icon': Icons.height},
     {'key': 'width', 'label': 'Breite', 'unit': 'mm', 'icon': Icons.swap_horiz},
     {'key': 'length', 'label': 'Länge', 'unit': 'm', 'icon': Icons.straighten},
+    {
+      'key': 'blockware_widths',
+      'label': 'Blockware Breiten',
+      'unit': 'mm',
+      'icon': Icons.view_column
+    },
   ];
 
   @override
@@ -460,57 +467,21 @@ class _DimensionsSettingsTab extends StatelessWidget {
   void _showAddValueDialog(BuildContext context, String key, String label, String unit) {
     final controller = TextEditingController();
 
-    showDialog(
+    // Wir nutzen direkt deine optimierte Eingabemaske
+    showDimensionInputDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: theme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.add_circle, color: theme.primary),
-            const SizedBox(width: 12),
-            Text('$label hinzufügen', style: TextStyle(color: theme.textPrimary)),
-          ],
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          style: TextStyle(color: theme.textPrimary),
-          decoration: InputDecoration(
-            labelText: 'Wert in $unit',
-            labelStyle: TextStyle(color: theme.textSecondary),
-            suffixText: unit,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: theme.primary, width: 2),
-            ),
-            filled: true,
-            fillColor: theme.background,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Abbrechen', style: TextStyle(color: theme.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final value = double.tryParse(controller.text.replaceAll(',', '.'));
-              if (value != null && value > 0) {
-                await _addValue(key, value);
-                Navigator.pop(ctx);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: theme.primary, foregroundColor: Colors.white),
-            child: const Text('Hinzufügen'),
-          ),
-        ],
-      ),
+      controller: controller,
+      title: '$label hinzufügen [$unit]',
+      // Schnellauswahl bleibt hier leer, da wir ja neue Werte definieren
+      quickOptions: const [],
+      onValueChanged: () async {
+        final value = double.tryParse(controller.text.replaceAll(',', '.'));
+        if (value != null && value > 0) {
+          await _addValue(key, value);
+        }
+      },
     );
   }
-
   Future<void> _addValue(String key, double value) async {
     await _db.collection('settings').doc('dimensions').set({
       key: FieldValue.arrayUnion([value]),

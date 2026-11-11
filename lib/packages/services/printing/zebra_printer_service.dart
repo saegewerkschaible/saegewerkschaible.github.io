@@ -146,7 +146,8 @@ class ZebraPrinterService {
   Future<PrintResult> printPackageLabel(
       BuildContext context,
       Map<String, dynamic> packageData,
-      ) async {
+      ) async
+  {
     try {
       debugPrint('=== PRINT PACKAGE LABEL ===');
 
@@ -188,6 +189,52 @@ class ZebraPrinterService {
       }
     } catch (e, stack) {
       debugPrint('=== PRINT ERROR ===');
+      debugPrint('Error: $e');
+      debugPrint('Stack: $stack');
+      return PrintResult.failure(e.toString());
+    }
+  }
+
+
+  /// Blockware-Etikett drucken (PDF)
+  Future<PrintResult> printBlockwareLabel(
+      BuildContext context,
+      Map<String, dynamic> packageData,
+      ) async {
+    try {
+      debugPrint('=== PRINT BLOCKWARE LABEL ===');
+
+      // 1. Drucker auswählen (gleiche Logik wie Standard)
+      final printer = await _selectPrinter(context);
+      if (printer == null) {
+        return PrintResult.failure('Kein Drucker ausgewählt');
+      }
+      debugPrint('Printer: ${printer.nickname} (${printer.ipAddress})');
+
+      // 2. Label-Breite aus Firebase-Cache laden
+      final labelWidthMm = await ZebraSettingsCache.getLabelWidthMm(
+        printer.id,
+        defaultWidth: 100.0,
+      );
+
+      // 3. Blockware-PDF generieren
+      debugPrint('Generating Blockware PDF...');
+      final pdfFile = await ZebraPdfGenerator.generateBlockwareLabel(
+        packageData,
+        labelWidthMm,
+      );
+      debugPrint('PDF created: ${pdfFile.path}');
+
+      // 4. An Drucker senden
+      final success = await printer.client.printPdf(pdfFile);
+
+      if (success) {
+        return PrintResult.success('Blockware-Etikett gedruckt auf ${printer.nickname}');
+      } else {
+        return PrintResult.failure('Drucker ${printer.nickname} nicht erreichbar');
+      }
+    } catch (e, stack) {
+      debugPrint('=== PRINT BLOCKWARE ERROR ===');
       debugPrint('Error: $e');
       debugPrint('Stack: $stack');
       return PrintResult.failure(e.toString());

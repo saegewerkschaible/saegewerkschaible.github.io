@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:saegewerk/packages/services/zebra_pdf_generator.dart';
+import 'package:saegewerk/packages/widgets/edit_blockware_widget.dart';
 import 'package:saegewerk/packages/widgets/edit_package_widget.dart';
 
 import '../../core/theme/theme_provider.dart';
@@ -99,7 +100,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
   void _showPackageSheet(Map<String, dynamic> data) {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     final isWideScreen = MediaQuery.of(context).size.width > 800;
+    final isBlockware = data['isBlockware'] == true;
 
+    print("isB:$isBlockware");
     if (isWideScreen) {
       // Auf großen Screens: Dialog statt BottomSheet
       showDialog(
@@ -157,15 +160,25 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
                 Divider(height: 1, color: theme.border),
                 Expanded(
-                  child: EditPackageWidget(
-                    packageData: data,
-                    userGroup: widget.userGroup,
-                    isNewPackage: false,
-                    onSaved: (success) {
-                      _loadLastPackage();
-                      if (success) Navigator.pop(ctx);
-                    },
-                  ),
+                    child: isBlockware
+      ? EditBlockwareWidget(
+          packageData: data,
+          userGroup: widget.userGroup,
+          isNewPackage: false,
+          onSaved: (success) {
+            _loadLastPackage();
+            if (success) Navigator.pop(ctx);
+          },
+        )
+      : EditPackageWidget(
+          packageData: data,
+          userGroup: widget.userGroup,
+          isNewPackage: false,
+          onSaved: (success) {
+            _loadLastPackage();
+            if (success) Navigator.pop(ctx);
+          },
+        ),
                 ),
               ],
             ),
@@ -237,7 +250,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
                 Divider(height: 1, color: theme.border),
                 Expanded(
-                  child: EditPackageWidget(
+                  child: isBlockware
+                      ? EditBlockwareWidget(
+                    packageData: data,
+                    userGroup: widget.userGroup,
+                    isNewPackage: false,
+                    onSaved: (success) {
+                      _loadLastPackage();
+                      if (success) Navigator.pop(ctx);
+                    },
+                  )
+                      : EditPackageWidget(
                     packageData: data,
                     userGroup: widget.userGroup,
                     isNewPackage: false,
@@ -257,7 +280,12 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   Future<void> _downloadPdf(Map<String, dynamic> data) async {
     try {
-      // Daten für PDF vorbereiten
+
+
+
+      final isBlockware = data['isBlockware'] == true;
+      final List<dynamic> bretterListe = data['bretter'] ?? [];
+
       final printData = {
         'Barcode': data['barcode']?.toString() ?? '',
         'Nr': data['barcode']?.toString() ?? '',
@@ -268,16 +296,24 @@ class _ScannerScreenState extends State<ScannerScreen> {
         'H': data['hoehe']?.toString() ?? '',
         'B': data['breite']?.toString() ?? '',
         'L': data['laenge']?.toString() ?? '',
-        'Stk': data['stueckzahl']?.toString() ?? '',
         'Menge': data['menge']?.toString() ?? '',
         'Bemerkung': data['bemerkung']?.toString() ?? '',
         'Nr_ext': data['nrExt']?.toString() ?? '',
         'AbzugStk': data['abzugStk']?.toString() ?? '',
         'AbzugLaenge': data['abzugLaenge']?.toString() ?? '',
+
+        // Blockware-spezifische Felder korrigieren:
+        if (isBlockware) 'Staerke': data['staerke']?.toString() ?? '',
+        if (isBlockware) 'Bretter': bretterListe, // Die Liste direkt übergeben
+        if (isBlockware) 'Stueckzahl': bretterListe.length.toString(),
+
+        // Standard-Paket Feld
+        if (!isBlockware) 'Stk': data['stueckzahl']?.toString() ?? '',
       };
 
+
       // PDF generieren
-      final pdfFile = await ZebraPdfGenerator.generatePackageLabel(printData, 100.0);
+      final pdfFile = data['isBlockware']==true? await ZebraPdfGenerator.generateBlockwareLabel(printData, 100.0): await ZebraPdfGenerator.generatePackageLabel(printData, 100.0);
 
       // Teilen/Download
       await Share.shareXFiles(
@@ -289,6 +325,143 @@ class _ScannerScreenState extends State<ScannerScreen> {
         showAppSnackbar(context, 'Fehler beim Erstellen des PDFs: $e');
       }
     }}
+  void _showNewBlockwareSheet() {
+    final theme = Provider.of<ThemeProvider>(context, listen: false);
+    final isWideScreen = MediaQuery.of(context).size.width > 800;
+
+    if (isWideScreen) {
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          backgroundColor: theme.surface,
+          insetPadding: const EdgeInsets.all(24),
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.85,
+            constraints: const BoxConstraints(maxWidth: 1200),
+            height: MediaQuery.of(context).size.height * 0.85,
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: theme.primaryLight,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.view_column, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Neue Blockware',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close, color: theme.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: theme.border),
+                Expanded(
+                  child: EditBlockwareWidget(
+                    packageData: null,
+                    userGroup: widget.userGroup,
+                    isNewPackage: true,
+                    onSaved: (success) {
+                      _loadLastPackage();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => DraggableScrollableSheet(
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (_, controller) => Container(
+            decoration: BoxDecoration(
+              color: theme.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 12),
+                  height: 4,
+                  width: 40,
+                  decoration: BoxDecoration(
+                    color: theme.textSecondary.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: theme.primaryLight,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.view_column, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Neue Blockware',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: Icon(Icons.close, color: theme.textSecondary),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: theme.border),
+                Expanded(
+                  child: EditBlockwareWidget(
+                    packageData: null,
+                    userGroup: widget.userGroup,
+                    isNewPackage: true,
+                    onSaved: (success) {
+                      _loadLastPackage();
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+  }
   void _showNewPackageSheet() {
     final theme = Provider.of<ThemeProvider>(context, listen: false);
     final isWideScreen = MediaQuery.of(context).size.width > 800;
@@ -817,6 +990,13 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             onTap: _showNewPackageSheet,
                             fixedSize: _getButtonSize(screenWidth),
                           ),
+                    _buildMenuButton(
+                          theme: theme,
+                          icon: Icons.view_column,
+                          label: 'Blockware',
+                          onTap: _showNewBlockwareSheet,
+                          fixedSize: _getButtonSize(screenWidth),
+   ),
                         ],
                       ),
                     ),
